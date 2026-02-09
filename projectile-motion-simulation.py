@@ -30,12 +30,12 @@ A = np.pi * r**2            # cross-sectional area (m^2)
 # Quadratic drag coefficient: a_drag = -(k/m)*|v|*v
 k_quad = 0.5 * rho * Cd * A
 
-# Linear drag coefficient (deprecated in this version; forced to 0 when no-drag)
-b_lin = 0.02                # kg/s (kept for compatibility)
+# Linear drag coefficient (deprecated in this version; kept for compatibility)
+b_lin = 0.02                # kg/s (not used in this version)
 
 # Enforce: if no quadratic drag, then no drag at all and b_lin = 0
 if not use_quadratic_drag:
-    b_lin = 0.2
+    b_lin = 0.0
 
 dt = 0.1                    # time step (s)
 t_max = 10.0                # max sim time (s)
@@ -121,7 +121,9 @@ def simulate(accel_func, step_func):
             np.array(vx_vals), np.array(vy_vals))
 
 # ---- Simulator that accepts dt/t_max (for timestep-size error study) ----
-def simulate_with_dt(accel_func, step_func, dt_local, t_max_local):
+# NOTE: stop_at_ground=False is used for convergence-order plots so the ground-impact
+#       event doesn’t dominate/cap the apparent order.
+def simulate_with_dt(accel_func, step_func, dt_local, t_max_local, stop_at_ground=True):
     theta = np.deg2rad(theta_deg)
     vx0 = v0 * np.cos(theta)
     vy0 = v0 * np.sin(theta)
@@ -139,7 +141,7 @@ def simulate_with_dt(accel_func, step_func, dt_local, t_max_local):
         state = step_func(state, dt_local, accel_func)
         t += dt_local
 
-        if state[1] < 0 and t > dt_local:
+        if stop_at_ground and (state[1] < 0) and (t > dt_local):
             x_prev, y_prev = x_vals[-1], y_vals[-1]
             x_new, y_new = state[0], state[1]
             denom = (y_prev - y_new)
@@ -271,7 +273,6 @@ def overlay_ball_animation(t_rk, x_rk, y_rk, t_eu, x_eu, y_eu, title="RK4 vs Eul
     plt.close(fig)
     return HTML(ani.to_jshtml())
 
-# ---- Analytical animation variant (only for NO-drag case) ----
 def overlay_ball_animation_with_analytical(t_rk, x_rk, y_rk,
                                           t_eu, x_eu, y_eu,
                                           t_an, x_an, y_an,
@@ -424,7 +425,9 @@ plt.show()
 # ==========================
 
 dt_ref = max(1e-4, dt / 50.0)
-t_ref, x_ref, y_ref, vx_ref, vy_ref = simulate_with_dt(acceleration_with_drag, rk4_step, dt_ref, t_max)
+t_ref, x_ref, y_ref, vx_ref, vy_ref = simulate_with_dt(
+    acceleration_with_drag, rk4_step, dt_ref, t_max, stop_at_ground=True
+)
 
 t_rk_err, err_rk = position_error_vs_time(t_rk, x_rk, y_rk, t_ref, x_ref, y_ref)
 t_eu_err, err_eu = position_error_vs_time(t_eu, x_eu, y_eu, t_ref, x_ref, y_ref)
@@ -439,6 +442,11 @@ plt.legend()
 plt.grid(True)
 plt.show()
 
+# ==========================
+# Convergence study (max error vs timestep)
+# IMPORTANT: stop_at_ground=False so the landing event doesn't cap the order
+# ==========================
+
 dt_list = np.array([0.2, 0.1, 0.05, 0.025, 0.0125], dtype=float)
 
 max_err_rk = []
@@ -446,12 +454,16 @@ max_err_eu = []
 
 dt_ref_sweep = max(1e-4, float(np.min(dt_list)) / 50.0)
 t_ref_s, x_ref_s, y_ref_s, vx_ref_s, vy_ref_s = simulate_with_dt(
-    acceleration_with_drag, rk4_step, dt_ref_sweep, t_max
+    acceleration_with_drag, rk4_step, dt_ref_sweep, t_max, stop_at_ground=False
 )
 
 for dti in dt_list:
-    t_rk_i, x_rk_i, y_rk_i, _, _ = simulate_with_dt(acceleration_with_drag, rk4_step, float(dti), t_max)
-    t_eu_i, x_eu_i, y_eu_i, _, _ = simulate_with_dt(acceleration_with_drag, euler_step, float(dti), t_max)
+    t_rk_i, x_rk_i, y_rk_i, _, _ = simulate_with_dt(
+        acceleration_with_drag, rk4_step, float(dti), t_max, stop_at_ground=False
+    )
+    t_eu_i, x_eu_i, y_eu_i, _, _ = simulate_with_dt(
+        acceleration_with_drag, euler_step, float(dti), t_max, stop_at_ground=False
+    )
 
     _, err_rk_i = position_error_vs_time(t_rk_i, x_rk_i, y_rk_i, t_ref_s, x_ref_s, y_ref_s)
     _, err_eu_i = position_error_vs_time(t_eu_i, x_eu_i, y_eu_i, t_ref_s, x_ref_s, y_ref_s)
@@ -471,6 +483,26 @@ plt.title("Error vs Timestep Size (log-log)")
 plt.legend()
 plt.grid(True, which="both")
 plt.show()
+
+# ---- Estimate convergence slopes from log-log data (MOVED HERE so arrays exist) ----
+mask_rk = np.isfinite(max_err_rk) & (max_err_rk > 0)
+mask_eu = np.isfinite(max_err_eu) & (max_err_eu > 0)
+
+slope_rk, intercept_rk = np.polyfit(
+    np.log(dt_list[mask_rk]),
+    np.log(max_err_rk[mask_rk]),
+    1
+)
+
+slope_eu, intercept_eu = np.polyfit(
+    np.log(dt_list[mask_eu]),
+    np.log(max_err_eu[mask_eu]),
+    1
+)
+
+print("\nEstimated convergence order from log-log slope:")
+print(f"RK4 slope  ≈ {slope_rk:.3f}")
+print(f"Euler slope ≈ {slope_eu:.3f}")
 
 # ==========================
 # Distance to analytical (ONLY for NO-drag case)
@@ -495,10 +527,18 @@ if has_analytical:
 # ==========================
 
 if has_analytical:
-    display(overlay_ball_animation_with_analytical(t_rk, x_rk, y_rk, t_eu, x_eu, y_eu, t_an, x_an, y_an,
-                                                   "RK4 vs Euler vs Analytical"))
+    display(overlay_ball_animation_with_analytical(
+        t_rk, x_rk, y_rk,
+        t_eu, x_eu, y_eu,
+        t_an, x_an, y_an,
+        "RK4 vs Euler vs Analytical"
+    ))
 else:
-    display(overlay_ball_animation(t_rk, x_rk, y_rk, t_eu, x_eu, y_eu, "RK4 vs Euler"))
+    display(overlay_ball_animation(
+        t_rk, x_rk, y_rk,
+        t_eu, x_eu, y_eu,
+        "RK4 vs Euler"
+    ))
 
 LAST_RESULTS = {
     "rk4": (t_rk, x_rk, y_rk, vx_rk, vy_rk),
