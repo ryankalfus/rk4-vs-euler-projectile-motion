@@ -24,6 +24,34 @@ function createFullscreenButton(card) {
   return button;
 }
 
+function resizePlotlyCharts() {
+  const plots = document.querySelectorAll(".js-plotly-plot");
+
+  plots.forEach((plot) => {
+    if (window.Plotly?.Plots?.resize) {
+      window.Plotly.Plots.resize(plot);
+    }
+  });
+
+  window.dispatchEvent(new Event("resize"));
+}
+
+function syncFullscreenLayout() {
+  const fullscreenCard = document.fullscreenElement?.matches?.('[id$="-card"]')
+    ? document.fullscreenElement
+    : null;
+
+  document.querySelectorAll('[id$="-card"]').forEach((card) => {
+    card.classList.toggle("is-fullscreen-card", card === fullscreenCard);
+  });
+
+  // Give the browser a moment to finish the fullscreen transition, then
+  // force Plotly to recompute chart sizes using the normal dashboard width.
+  window.setTimeout(resizePlotlyCharts, 0);
+  window.setTimeout(resizePlotlyCharts, 150);
+  window.setTimeout(resizePlotlyCharts, 350);
+}
+
 function installFullscreenButtons() {
   const cards = document.querySelectorAll('[id$="-card"]');
 
@@ -50,5 +78,8 @@ observer.observe(document.documentElement, {
   subtree: true,
 });
 
+document.addEventListener("fullscreenchange", syncFullscreenLayout);
 window.addEventListener("load", installFullscreenButtons);
+window.addEventListener("load", syncFullscreenLayout);
 document.addEventListener("DOMContentLoaded", installFullscreenButtons);
+document.addEventListener("DOMContentLoaded", syncFullscreenLayout);

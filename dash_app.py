@@ -23,7 +23,7 @@ CONTROL_SPECS = {
     "theta": {"min": 5.0, "max": 85.0, "step": 0.001, "default": 45.0},
     "v0": {"min": 1.0, "max": 60.0, "step": 0.001, "default": 20.0},
     "y0": {"min": 0.0, "max": 20.0, "step": 0.001, "default": 0.0},
-    "dt": {"min": 0.01, "max": 0.2, "step": 0.001, "default": 0.01},
+    "dt": {"min": 0.01, "max": 0.2, "step": 0.001, "default": 0.1},
     "drag-strength": {"min": 0.0, "max": 3.0, "step": 0.001, "default": 1.0},
     "tmax": {"min": 1.0, "max": 20.0, "step": 0.001, "default": 10.0},
 }
@@ -411,7 +411,7 @@ def build_animation_panel_html(series_list):
         <input id="scrubber" type="range" min="0" max="1000" value="0" />
       </div>
       <div class="controls-row">
-        <button id="playBtn">Pause</button>
+        <button id="playBtn">Play</button>
         <button id="resetBtn" class="secondary">Restart</button>
         <select id="speedSelect" aria-label="Animation speed">
           <option value="0.25">0.25x</option>
@@ -439,7 +439,7 @@ def build_animation_panel_html(series_list):
     const resetBtn = document.getElementById("resetBtn");
     const speedSelect = document.getElementById("speedSelect");
     const timebox = document.getElementById("timebox");
-    let playing = true;
+    let playing = false;
     let simTime = 0;
     let lastStamp = null;
     let playbackRate = 1;

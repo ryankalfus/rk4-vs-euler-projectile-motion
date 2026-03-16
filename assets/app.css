@@ -1,10 +1,12 @@
 .app-shell {
   display: flex;
   font-family: "Avenir Next", Helvetica, Arial, sans-serif;
+  min-width: 0;
 }
 
 .sidebar-panel {
   width: 360px;
+  flex: 0 0 360px;
   padding: 24px;
   background: #f8fafc;
   border-right: 1px solid #d9e2ec;
@@ -17,6 +19,7 @@
 
 .content-panel {
   flex: 1;
+  min-width: 0;
   padding: 24px;
   background: #eef2f6;
 }
@@ -141,10 +144,25 @@
   background: #eef2f6;
 }
 
+:fullscreen[id$="-card"] {
+  padding: 16px;
+  box-sizing: border-box;
+}
+
 :fullscreen .js-plotly-plot,
 :fullscreen .plot-container,
 :fullscreen .svg-container {
   height: calc(100vh - 80px) !important;
+}
+
+:fullscreen[id$="-card"] .js-plotly-plot,
+:fullscreen[id$="-card"] .plot-container,
+:fullscreen[id$="-card"] .svg-container {
+  width: 100% !important;
+}
+
+.is-fullscreen-card {
+  overflow: visible;
 }
 
 .plotly-fullscreen-btn {
