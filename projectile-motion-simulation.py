@@ -217,7 +217,7 @@ def build_animation(series_list, title):
     ]
     frames = min(len(t_vals) for t_vals, _, _, _ in downsampled)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(8, 5))
     ax.set_axis_off()
     ax.set_aspect("equal", adjustable="box")
 
@@ -234,16 +234,18 @@ def build_animation(series_list, title):
 
     trails = []
     balls = []
-    for _, _, _, label in downsampled:
-        trail, = ax.plot([], [], linewidth=2, alpha=0.35, label=label)
-        ball, = ax.plot([], [], marker="o", markersize=14, label=label)
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    for idx, (_, _, _, label) in enumerate(downsampled):
+        color = colors[idx % len(colors)]
+        trail, = ax.plot([], [], linewidth=2, alpha=0.45, color=color, label=label)
+        ball, = ax.plot([], [], marker="o", markersize=12, color=color)
         trails.append(trail)
         balls.append(ball)
 
-    time_text = ax.text(0.02, 0.95, "", transform=ax.transAxes, fontsize=14, va="top")
+    time_text = ax.text(0.02, 0.90, "", transform=ax.transAxes, fontsize=14, va="top")
     title_text = ax.text(
         0.5,
-        0.98,
+        0.95,
         title,
         transform=ax.transAxes,
         fontsize=14,
@@ -251,16 +253,17 @@ def build_animation(series_list, title):
         ha="center",
     )
 
-    fig.subplots_adjust(bottom=0.14)
+    fig.subplots_adjust(bottom=0.05, top=0.98, left=0.04, right=0.98)
     legend = ax.legend(
-        loc="upper left",
-        bbox_to_anchor=(0.0, -0.10),
+        handles=trails,
+        loc="upper right",
+        bbox_to_anchor=(0.98, 0.82),
         frameon=True,
         ncol=1,
         handlelength=2.0,
         borderaxespad=0.0,
     )
-    legend.set_title("Key (color -> method)")
+    legend.set_title("Method")
 
     def init():
         for trail in trails:

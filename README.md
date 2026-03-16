@@ -25,6 +25,8 @@ When drag is off, it also compares both numerical methods to the closed-form sol
 ## Project files
 
 - [`projectile-motion-simulation.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/projectile-motion-simulation.py): main simulation and plotting code
+- [`simulation-notebook.ipynb`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/simulation-notebook.ipynb): easiest way to run the simulation and view plots inline in Jupyter
+- [`streamlit_app.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/streamlit_app.py): interactive browser app with sliders and plots
 - [`images/`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/images): saved example plots and animation screenshots
 - [`ryan-professor-02-17-2026.md`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/ryan-professor-02-17-2026.md): notes/transcript from a project discussion
 
@@ -34,14 +36,52 @@ When drag is off, it also compares both numerical methods to the closed-form sol
 - NumPy
 - Matplotlib
 - IPython
+- Streamlit
 
 Install the packages with:
 
 ```bash
-pip install numpy matplotlib ipython
+pip install numpy matplotlib ipython streamlit
 ```
 
 ## How to run it
+
+### Faster browser app: Dash
+
+If Streamlit feels laggy, run the Dash app instead:
+
+```bash
+./.venv/bin/python dash_app.py
+```
+
+Then open `http://localhost:8050`.
+
+### Most interactive option: run the browser app
+
+If you want sliders and a clean browser view, run:
+
+```bash
+streamlit run streamlit_app.py
+```
+
+The app lets you change:
+
+- launch angle
+- initial speed
+- initial height
+- timestep size
+- max simulation time
+- air resistance on/off
+
+It shows:
+
+- summary numbers
+- trajectory plot
+- speed plot
+- height plot
+- error plot
+- convergence plot
+- animation
 
 You can run the script from this folder:
 
@@ -50,6 +90,17 @@ python projectile-motion-simulation.py
 ```
 
 You can also run it in Jupyter if you want the animation embedded in a notebook.
+
+### Cleaner option: run the notebook
+
+If you want the outputs in one place, open the notebook:
+
+```bash
+python3 -m pip install notebook numpy matplotlib ipython
+jupyter notebook
+```
+
+Then open [`simulation-notebook.ipynb`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/simulation-notebook.ipynb) and run the code cell.
 
 ## Settings you can change
 

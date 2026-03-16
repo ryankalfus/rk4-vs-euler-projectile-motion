@@ -1,0 +1,6 @@
+numpy
+matplotlib
+ipython
+plotly
+dash
+streamlit
