@@ -54,30 +54,49 @@
   box-shadow: 0 0 0 2px rgba(42, 122, 188, 0.12);
 }
 
-.control-slider .rc-slider-rail {
-  background-color: #d8e2f0;
-  height: 6px;
+.control-slider-native {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  margin: 6px 0 0 0;
 }
 
-.control-slider .rc-slider-track {
-  background-color: #2a7abc;
-  height: 6px;
+.control-slider-native:focus {
+  outline: none;
 }
 
-.control-slider .rc-slider-handle {
+.control-slider-native::-webkit-slider-runnable-track {
+  height: 6px;
+  background: #d8e2f0;
+  border-radius: 999px;
+}
+
+.control-slider-native::-webkit-slider-thumb {
+  -webkit-appearance: none;
   width: 18px;
   height: 18px;
   margin-top: -6px;
+  border-radius: 50%;
   border: 3px solid #2a7abc;
-  background-color: #ffffff;
+  background: #ffffff;
   box-shadow: 0 2px 8px rgba(42, 122, 188, 0.18);
-  opacity: 1;
 }
 
-.control-slider .rc-slider-handle:active,
-.control-slider .rc-slider-handle:focus {
-  border-color: #1f5f91;
-  box-shadow: 0 0 0 4px rgba(42, 122, 188, 0.16);
+.control-slider-native::-moz-range-track {
+  height: 6px;
+  background: #d8e2f0;
+  border-radius: 999px;
+  border: none;
+}
+
+.control-slider-native::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid #2a7abc;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(42, 122, 188, 0.18);
 }
 
 .drag-checklist {
