@@ -24,7 +24,7 @@ CONTROL_SPECS = {
     "theta": {"min": 5.0, "max": 85.0, "step": 0.001, "default": 45.0},
     "v0": {"min": 1.0, "max": 60.0, "step": 0.001, "default": 20.0},
     "y0": {"min": 0.0, "max": 20.0, "step": 0.001, "default": 0.0},
-    "dt": {"min": 0.01, "max": 0.2, "step": 0.001, "default": 0.1},
+    "dt": {"min": 0.01, "max": 0.2, "step": 0.001, "default": 0.01},
     "drag-strength": {"min": 0.0, "max": 3.0, "step": 0.001, "default": 1.0},
     "tmax": {"min": 1.0, "max": 20.0, "step": 0.001, "default": 10.0},
 }
@@ -93,7 +93,7 @@ def control_block(label, control_id):
                         value=spec["default"],
                         step=0.001,
                         debounce=True,
-                        className="control-input",
+                        className="control-input control-input-white",
                     ),
                 ],
                 className="control-label-row",
@@ -127,17 +127,19 @@ def graph_card(graph_id):
                     "modeBarButtonsToRemove": [
                         "select2d",
                         "lasso2d",
-                        "autoScale2d",
-                        "resetScale2d",
                         "hoverClosestCartesian",
                         "hoverCompareCartesian",
                         "toggleSpikelines",
                         "toImage",
                     ],
+                    "modeBarButtonsToAdd": [
+                        "pan2d",
+                    ],
                 },
                 style={"height": f"{PLOT_HEIGHT}px"},
             )
         ],
+        id=f"{graph_id}-card",
         style={
             "background": "white",
             "border": "1px solid #d9e2ec",
@@ -188,7 +190,17 @@ def running_max(values):
     return np.maximum.accumulate(np.asarray(values, dtype=float))
 
 
-def make_figure(series, xlabel, ylabel, title, *, log_x=False, log_y=False):
+def make_figure(
+    series,
+    xlabel,
+    ylabel,
+    title,
+    *,
+    log_x=False,
+    log_y=False,
+    x_tickvals=None,
+    x_ticktext=None,
+):
     """Build one fast Plotly figure."""
     prepared = prepare_series(series, log_x=log_x, log_y=log_y)
 
@@ -212,17 +224,25 @@ def make_figure(series, xlabel, ylabel, title, *, log_x=False, log_y=False):
     fig.update_layout(
         template="plotly_white",
         height=PLOT_HEIGHT,
-        margin={"l": 64, "r": 28, "t": 72, "b": 60},
+        margin={"l": 64, "r": 28, "t": 88, "b": 60},
         dragmode="zoom",
         hovermode="closest",
         legend={
             "orientation": "h",
             "yanchor": "bottom",
-            "y": 1.03,
+            "y": 1.04,
             "xanchor": "left",
             "x": 0,
+            "font": {"size": 12},
         },
-        title={"text": title, "x": 0.02, "xanchor": "left"},
+        title={
+            "text": f"<b>{title}</b>",
+            "x": 0.02,
+            "xanchor": "left",
+            "y": 0.99,
+            "yanchor": "top",
+            "font": {"size": 12},
+        },
     )
     fig.update_xaxes(
         title=xlabel,
@@ -230,6 +250,9 @@ def make_figure(series, xlabel, ylabel, title, *, log_x=False, log_y=False):
         zeroline=False,
         type="log" if log_x else "linear",
         range=axis_range(x_all, log_scale=log_x),
+        tickmode="array" if x_tickvals is not None else None,
+        tickvals=x_tickvals,
+        ticktext=x_ticktext,
     )
     fig.update_yaxes(
         title=ylabel,
@@ -248,7 +271,7 @@ app.layout = html.Div(
     [
         html.Div(
             [
-                html.H1("Projectile Motion Explorer", style={"marginTop": "0"}),
+                html.H1("Projectile Motion", style={"marginTop": "0"}),
                 html.Div(
                     [
                         control_block("Launch angle (degrees)", "theta"),
@@ -495,8 +518,6 @@ def update_view(_n_clicks, theta_deg, v0, y0, dt, drag_strength, t_max, drag_val
     animation_title = "RK4 vs Euler"
 
     if has_analytical and analytical_results is not None:
-        t_rk_err, err_rk = sim.analytical_position_error_vs_time(t_rk, x_rk, y_rk)
-        t_eu_err, err_eu = sim.analytical_position_error_vs_time(t_eu, x_eu, y_eu)
         t_rk_an, err_rk_vs_an = sim.position_error_vs_time(t_rk, x_rk, y_rk, t_an, x_an, y_an)
         t_eu_an, err_eu_vs_an = sim.position_error_vs_time(t_eu, x_eu, y_eu, t_an, x_an, y_an)
         analytical_figure = make_figure(
@@ -508,19 +529,14 @@ def update_view(_n_clicks, theta_deg, v0, y0, dt, drag_strength, t_max, drag_val
             "position error (m)",
             "Distance From Analytical",
         )
-        max_error_title = "Max Error vs Time (vs analytical)"
-    else:
-        dt_ref = max(1e-4, sim.dt / 50.0)
-        t_ref, x_ref, y_ref, _, _ = sim.simulate_with_dt(
-            sim.acceleration_with_drag,
-            sim.rk4_step,
-            dt_ref,
-            sim.t_max,
-            stop_at_ground=True,
-        )
-        t_rk_err, err_rk = sim.position_error_vs_time(t_rk, x_rk, y_rk, t_ref, x_ref, y_ref)
-        t_eu_err, err_eu = sim.position_error_vs_time(t_eu, x_eu, y_eu, t_ref, x_ref, y_ref)
-        max_error_title = "Max Error vs Time (vs RK4 reference)"
+    dt_list, max_err_rk, max_err_eu = sim.run_convergence_study(sim.acceleration_with_drag)
+    slope_rk = sim.estimate_slope(dt_list, max_err_rk)
+    slope_eu = sim.estimate_slope(dt_list, max_err_eu)
+    convergence_title = (
+        f"Error vs Timestep Size (log-log) | RK4 slope {slope_rk:.2f}, "
+        f"Euler slope {slope_eu:.2f}"
+    )
+    dt_ticktext = [f"{dt_i:g}" for dt_i in dt_list]
 
     animation_html = sim.build_animation(animation_series, animation_title).data
 
@@ -531,13 +547,16 @@ def update_view(_n_clicks, theta_deg, v0, y0, dt, drag_strength, t_max, drag_val
         make_figure(height_series, "time (s)", "height y (m)", "Height vs Time"),
         make_figure(
             [
-                (t_rk_err, running_max(err_rk), "RK4 max error"),
-                (t_eu_err, running_max(err_eu), "Euler max error"),
+                (dt_list, max_err_rk, "RK4 max error"),
+                (dt_list, max_err_eu, "Euler max error"),
             ],
-            "time (s)",
-            "max position error so far (m)",
-            max_error_title,
+            "timestep dt (s)",
+            "max position error over time (m)",
+            convergence_title,
+            log_x=True,
             log_y=True,
+            x_tickvals=dt_list,
+            x_ticktext=dt_ticktext,
         ),
         analytical_figure,
         animation_html,
