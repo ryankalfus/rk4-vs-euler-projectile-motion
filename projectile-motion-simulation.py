@@ -350,11 +350,6 @@ def overlay_ball_animation_with_analytical(t_rk, x_rk, y_rk,
 # Run once: RK4 vs Euler
 # ==========================
 
-clear_output(wait=True)
-
-t_rk, x_rk, y_rk, vx_rk, vy_rk = simulate(acceleration_with_drag, rk4_step)
-t_eu, x_eu, y_eu, vx_eu, vy_eu = simulate(acceleration_with_drag, euler_step)
-
 def summarize(t_vals, x_vals, y_vals):
     return {
         "Range (m)": float(x_vals[-1]),
@@ -362,187 +357,179 @@ def summarize(t_vals, x_vals, y_vals):
         "Time (s)": float(t_vals[-1]),
     }
 
-stats_rk = summarize(t_rk, x_rk, y_rk)
-stats_eu = summarize(t_eu, x_eu, y_eu)
+LAST_RESULTS = {}
 
-print("Integrator comparison (same settings)")
-print(f"RK4:   Range: {stats_rk['Range (m)']:.2f} m | Max height: {stats_rk['Max height (m)']:.2f} m | Time: {stats_rk['Time (s)']:.2f} s")
-print(f"Euler: Range: {stats_eu['Range (m)']:.2f} m | Max height: {stats_eu['Max height (m)']:.2f} m | Time: {stats_eu['Time (s)']:.2f} s")
+def main():
+    global LAST_RESULTS
 
-# If NO-drag, compute analytical; if drag is on, do NOT compute/plot it
-has_analytical = not use_quadratic_drag
+    clear_output(wait=True)
 
-if has_analytical:
-    t_an, x_an, y_an, vx_an, vy_an = analytical_closed_form(dt)
-    stats_an = summarize(t_an, x_an, y_an)
-    print(f"Analytical: Range: {stats_an['Range (m)']:.2f} m | Max height: {stats_an['Max height (m)']:.2f} m | Time: {stats_an['Time (s)']:.2f} s")
+    t_rk, x_rk, y_rk, vx_rk, vy_rk = simulate(acceleration_with_drag, rk4_step)
+    t_eu, x_eu, y_eu, vx_eu, vy_eu = simulate(acceleration_with_drag, euler_step)
 
-# --- Trajectory plot ---
-plt.figure()
-plt.plot(x_rk, y_rk, label="RK4")
-plt.plot(x_eu, y_eu, label="Euler")
-if has_analytical:
-    plt.plot(x_an, y_an, label="Analytical (closed-form)")
-plt.xlabel("x (m)")
-plt.ylabel("y (m)")
-plt.title("Projectile Trajectory (RK4 vs Euler" + (" vs Analytical" if has_analytical else "") + ")")
-plt.legend()
-plt.grid(True)
-plt.show()
+    stats_rk = summarize(t_rk, x_rk, y_rk)
+    stats_eu = summarize(t_eu, x_eu, y_eu)
 
-# --- Speed vs time ---
-speed_rk = np.hypot(vx_rk, vy_rk)
-speed_eu = np.hypot(vx_eu, vy_eu)
+    print("Integrator comparison (same settings)")
+    print(f"RK4:   Range: {stats_rk['Range (m)']:.2f} m | Max height: {stats_rk['Max height (m)']:.2f} m | Time: {stats_rk['Time (s)']:.2f} s")
+    print(f"Euler: Range: {stats_eu['Range (m)']:.2f} m | Max height: {stats_eu['Max height (m)']:.2f} m | Time: {stats_eu['Time (s)']:.2f} s")
 
-plt.figure()
-plt.plot(t_rk, speed_rk, label="RK4")
-plt.plot(t_eu, speed_eu, label="Euler")
-if has_analytical:
-    speed_an = np.hypot(vx_an, vy_an)
-    plt.plot(t_an, speed_an, label="Analytical (closed-form)")
-plt.xlabel("time (s)")
-plt.ylabel("speed (m/s)")
-plt.title("Speed vs Time (RK4 vs Euler" + (" vs Analytical" if has_analytical else "") + ")")
-plt.legend()
-plt.grid(True)
-plt.show()
+    has_analytical = not use_quadratic_drag
 
-# --- Height vs time ---
-plt.figure()
-plt.plot(t_rk, y_rk, label="RK4")
-plt.plot(t_eu, y_eu, label="Euler")
-if has_analytical:
-    plt.plot(t_an, y_an, label="Analytical (closed-form)")
-plt.xlabel("time (s)")
-plt.ylabel("height y (m)")
-plt.title("Height vs Time (RK4 vs Euler" + (" vs Analytical" if has_analytical else "") + ")")
-plt.legend()
-plt.grid(True)
-plt.show()
+    if has_analytical:
+        t_an, x_an, y_an, vx_an, vy_an = analytical_closed_form(dt)
+        stats_an = summarize(t_an, x_an, y_an)
+        print(f"Analytical: Range: {stats_an['Range (m)']:.2f} m | Max height: {stats_an['Max height (m)']:.2f} m | Time: {stats_an['Time (s)']:.2f} s")
 
-# ==========================
-# Error vs time and Error vs timestep size
-# ==========================
+    plt.figure()
+    plt.plot(x_rk, y_rk, label="RK4")
+    plt.plot(x_eu, y_eu, label="Euler")
+    if has_analytical:
+        plt.plot(x_an, y_an, label="Analytical (closed-form)")
+    plt.xlabel("x (m)")
+    plt.ylabel("y (m)")
+    plt.title("Projectile Trajectory (RK4 vs Euler" + (" vs Analytical" if has_analytical else "") + ")")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
-dt_ref = max(1e-4, dt / 50.0)
-t_ref, x_ref, y_ref, vx_ref, vy_ref = simulate_with_dt(
-    acceleration_with_drag, rk4_step, dt_ref, t_max, stop_at_ground=True
-)
+    speed_rk = np.hypot(vx_rk, vy_rk)
+    speed_eu = np.hypot(vx_eu, vy_eu)
 
-t_rk_err, err_rk = position_error_vs_time(t_rk, x_rk, y_rk, t_ref, x_ref, y_ref)
-t_eu_err, err_eu = position_error_vs_time(t_eu, x_eu, y_eu, t_ref, x_ref, y_ref)
+    plt.figure()
+    plt.plot(t_rk, speed_rk, label="RK4")
+    plt.plot(t_eu, speed_eu, label="Euler")
+    if has_analytical:
+        speed_an = np.hypot(vx_an, vy_an)
+        plt.plot(t_an, speed_an, label="Analytical (closed-form)")
+    plt.xlabel("time (s)")
+    plt.ylabel("speed (m/s)")
+    plt.title("Speed vs Time (RK4 vs Euler" + (" vs Analytical" if has_analytical else "") + ")")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
-plt.figure()
-plt.plot(t_rk_err, err_rk, label="RK4 error vs reference")
-plt.plot(t_eu_err, err_eu, label="Euler error vs reference")
-plt.xlabel("time (s)")
-plt.ylabel("position error (m)")
-plt.title("Error vs Time (relative to high-resolution RK4 reference)")
-plt.legend()
-plt.grid(True)
-plt.show()
+    plt.figure()
+    plt.plot(t_rk, y_rk, label="RK4")
+    plt.plot(t_eu, y_eu, label="Euler")
+    if has_analytical:
+        plt.plot(t_an, y_an, label="Analytical (closed-form)")
+    plt.xlabel("time (s)")
+    plt.ylabel("height y (m)")
+    plt.title("Height vs Time (RK4 vs Euler" + (" vs Analytical" if has_analytical else "") + ")")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
-# ==========================
-# Convergence study (max error vs timestep)
-# IMPORTANT: stop_at_ground=False so the landing event doesn't cap the order
-# ==========================
-
-dt_list = np.array([0.2, 0.1, 0.05, 0.025, 0.0125], dtype=float)
-
-max_err_rk = []
-max_err_eu = []
-
-dt_ref_sweep = max(1e-4, float(np.min(dt_list)) / 50.0)
-t_ref_s, x_ref_s, y_ref_s, vx_ref_s, vy_ref_s = simulate_with_dt(
-    acceleration_with_drag, rk4_step, dt_ref_sweep, t_max, stop_at_ground=False
-)
-
-for dti in dt_list:
-    t_rk_i, x_rk_i, y_rk_i, _, _ = simulate_with_dt(
-        acceleration_with_drag, rk4_step, float(dti), t_max, stop_at_ground=False
-    )
-    t_eu_i, x_eu_i, y_eu_i, _, _ = simulate_with_dt(
-        acceleration_with_drag, euler_step, float(dti), t_max, stop_at_ground=False
+    dt_ref = max(1e-4, dt / 50.0)
+    t_ref, x_ref, y_ref, vx_ref, vy_ref = simulate_with_dt(
+        acceleration_with_drag, rk4_step, dt_ref, t_max, stop_at_ground=True
     )
 
-    _, err_rk_i = position_error_vs_time(t_rk_i, x_rk_i, y_rk_i, t_ref_s, x_ref_s, y_ref_s)
-    _, err_eu_i = position_error_vs_time(t_eu_i, x_eu_i, y_eu_i, t_ref_s, x_ref_s, y_ref_s)
+    t_rk_err, err_rk = position_error_vs_time(t_rk, x_rk, y_rk, t_ref, x_ref, y_ref)
+    t_eu_err, err_eu = position_error_vs_time(t_eu, x_eu, y_eu, t_ref, x_ref, y_ref)
 
-    max_err_rk.append(float(np.max(err_rk_i)) if len(err_rk_i) else np.nan)
-    max_err_eu.append(float(np.max(err_eu_i)) if len(err_eu_i) else np.nan)
+    plt.figure()
+    plt.plot(t_rk_err, err_rk, label="RK4 error vs reference")
+    plt.plot(t_eu_err, err_eu, label="Euler error vs reference")
+    plt.xlabel("time (s)")
+    plt.ylabel("position error (m)")
+    plt.title("Error vs Time (relative to high-resolution RK4 reference)")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
-max_err_rk = np.array(max_err_rk, dtype=float)
-max_err_eu = np.array(max_err_eu, dtype=float)
+    dt_list = np.array([0.2, 0.1, 0.05, 0.025, 0.0125], dtype=float)
+    max_err_rk = []
+    max_err_eu = []
 
-plt.figure()
-plt.loglog(dt_list, max_err_rk, marker="o", label="RK4 max error")
-plt.loglog(dt_list, max_err_eu, marker="o", label="Euler max error")
-plt.xlabel("timestep dt (s)")
-plt.ylabel("max position error over time (m)")
-plt.title("Error vs Timestep Size (log-log)")
-plt.legend()
-plt.grid(True, which="both")
-plt.show()
+    dt_ref_sweep = max(1e-4, float(np.min(dt_list)) / 50.0)
+    t_ref_s, x_ref_s, y_ref_s, vx_ref_s, vy_ref_s = simulate_with_dt(
+        acceleration_with_drag, rk4_step, dt_ref_sweep, t_max, stop_at_ground=False
+    )
 
-# ---- Estimate convergence slopes from log-log data (MOVED HERE so arrays exist) ----
-mask_rk = np.isfinite(max_err_rk) & (max_err_rk > 0)
-mask_eu = np.isfinite(max_err_eu) & (max_err_eu > 0)
+    for dti in dt_list:
+        t_rk_i, x_rk_i, y_rk_i, _, _ = simulate_with_dt(
+            acceleration_with_drag, rk4_step, float(dti), t_max, stop_at_ground=False
+        )
+        t_eu_i, x_eu_i, y_eu_i, _, _ = simulate_with_dt(
+            acceleration_with_drag, euler_step, float(dti), t_max, stop_at_ground=False
+        )
 
-slope_rk, intercept_rk = np.polyfit(
-    np.log(dt_list[mask_rk]),
-    np.log(max_err_rk[mask_rk]),
-    1
-)
+        _, err_rk_i = position_error_vs_time(t_rk_i, x_rk_i, y_rk_i, t_ref_s, x_ref_s, y_ref_s)
+        _, err_eu_i = position_error_vs_time(t_eu_i, x_eu_i, y_eu_i, t_ref_s, x_ref_s, y_ref_s)
 
-slope_eu, intercept_eu = np.polyfit(
-    np.log(dt_list[mask_eu]),
-    np.log(max_err_eu[mask_eu]),
-    1
-)
+        max_err_rk.append(float(np.max(err_rk_i)) if len(err_rk_i) else np.nan)
+        max_err_eu.append(float(np.max(err_eu_i)) if len(err_eu_i) else np.nan)
 
-print("\nEstimated convergence order from log-log slope:")
-print(f"RK4 slope  ≈ {slope_rk:.3f}")
-print(f"Euler slope ≈ {slope_eu:.3f}")
+    max_err_rk = np.array(max_err_rk, dtype=float)
+    max_err_eu = np.array(max_err_eu, dtype=float)
 
-# ==========================
-# Distance to analytical (ONLY for NO-drag case)
-# ==========================
+    plt.figure()
+    plt.loglog(dt_list, max_err_rk, marker="o", label="RK4 max error")
+    plt.loglog(dt_list, max_err_eu, marker="o", label="Euler max error")
+    plt.xlabel("timestep dt (s)")
+    plt.ylabel("max position error over time (m)")
+    plt.title("Error vs Timestep Size (log-log)")
+    plt.legend()
+    plt.grid(True, which="both")
+    plt.show()
 
-if has_analytical:
-    t_rk_vs_an, err_rk_vs_an = position_error_vs_time(t_rk, x_rk, y_rk, t_an, x_an, y_an)
-    t_eu_vs_an, err_eu_vs_an = position_error_vs_time(t_eu, x_eu, y_eu, t_an, x_an, y_an)
+    mask_rk = np.isfinite(max_err_rk) & (max_err_rk > 0)
+    mask_eu = np.isfinite(max_err_eu) & (max_err_eu > 0)
 
-    max_rk_an = float(np.max(err_rk_vs_an)) if len(err_rk_vs_an) else float("nan")
-    max_eu_an = float(np.max(err_eu_vs_an)) if len(err_eu_vs_an) else float("nan")
+    slope_rk, intercept_rk = np.polyfit(
+        np.log(dt_list[mask_rk]),
+        np.log(max_err_rk[mask_rk]),
+        1
+    )
 
-    range_rk_an = float(abs(x_rk[-1] - x_an[-1]))
-    range_eu_an = float(abs(x_eu[-1] - x_an[-1]))
+    slope_eu, intercept_eu = np.polyfit(
+        np.log(dt_list[mask_eu]),
+        np.log(max_err_eu[mask_eu]),
+        1
+    )
 
-    print("\nDistance from Analytical (closed-form) curve:")
-    print(f"RK4:   max position difference over time = {max_rk_an:.6g} m | landing-range difference = {range_rk_an:.6g} m")
-    print(f"Euler: max position difference over time = {max_eu_an:.6g} m | landing-range difference = {range_eu_an:.6g} m")
+    print("\nEstimated convergence order from log-log slope:")
+    print(f"RK4 slope  ≈ {slope_rk:.3f}")
+    print(f"Euler slope ≈ {slope_eu:.3f}")
 
-# ==========================
-# Animation
-# ==========================
+    if has_analytical:
+        t_rk_vs_an, err_rk_vs_an = position_error_vs_time(t_rk, x_rk, y_rk, t_an, x_an, y_an)
+        t_eu_vs_an, err_eu_vs_an = position_error_vs_time(t_eu, x_eu, y_eu, t_an, x_an, y_an)
 
-if has_analytical:
-    display(overlay_ball_animation_with_analytical(
-        t_rk, x_rk, y_rk,
-        t_eu, x_eu, y_eu,
-        t_an, x_an, y_an,
-        "RK4 vs Euler vs Analytical"
-    ))
-else:
-    display(overlay_ball_animation(
-        t_rk, x_rk, y_rk,
-        t_eu, x_eu, y_eu,
-        "RK4 vs Euler"
-    ))
+        max_rk_an = float(np.max(err_rk_vs_an)) if len(err_rk_vs_an) else float("nan")
+        max_eu_an = float(np.max(err_eu_vs_an)) if len(err_eu_vs_an) else float("nan")
 
-LAST_RESULTS = {
-    "rk4": (t_rk, x_rk, y_rk, vx_rk, vy_rk),
-    "euler": (t_eu, x_eu, y_eu, vx_eu, vy_eu),
-}
-if has_analytical:
-    LAST_RESULTS["analytical"] = (t_an, x_an, y_an, vx_an, vy_an)
+        range_rk_an = float(abs(x_rk[-1] - x_an[-1]))
+        range_eu_an = float(abs(x_eu[-1] - x_an[-1]))
+
+        print("\nDistance from Analytical (closed-form) curve:")
+        print(f"RK4:   max position difference over time = {max_rk_an:.6g} m | landing-range difference = {range_rk_an:.6g} m")
+        print(f"Euler: max position difference over time = {max_eu_an:.6g} m | landing-range difference = {range_eu_an:.6g} m")
+
+    if has_analytical:
+        display(overlay_ball_animation_with_analytical(
+            t_rk, x_rk, y_rk,
+            t_eu, x_eu, y_eu,
+            t_an, x_an, y_an,
+            "RK4 vs Euler vs Analytical"
+        ))
+    else:
+        display(overlay_ball_animation(
+            t_rk, x_rk, y_rk,
+            t_eu, x_eu, y_eu,
+            "RK4 vs Euler"
+        ))
+
+    LAST_RESULTS = {
+        "rk4": (t_rk, x_rk, y_rk, vx_rk, vy_rk),
+        "euler": (t_eu, x_eu, y_eu, vx_eu, vy_eu),
+    }
+    if has_analytical:
+        LAST_RESULTS["analytical"] = (t_an, x_an, y_an, vx_an, vy_an)
+
+    return LAST_RESULTS
+
+if __name__ == "__main__":
+    main()
