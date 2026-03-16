@@ -1,9 +1,19 @@
 """Compare Euler and RK4 for 2D projectile motion."""
 
-import matplotlib.pyplot as plt
 import numpy as np
-from IPython.display import HTML, display
-from matplotlib.animation import FuncAnimation
+
+try:
+    import matplotlib.pyplot as plt
+    from matplotlib.animation import FuncAnimation
+except Exception:  # pragma: no cover - optional for notebook/local plotting only.
+    plt = None
+    FuncAnimation = None
+
+try:
+    from IPython.display import HTML, display
+except Exception:  # pragma: no cover - optional for notebook/local animation only.
+    HTML = None
+    display = None
 
 
 # Parameters you can change.
@@ -258,6 +268,9 @@ def downsample_series(t_vals, x_vals, y_vals, target=400):
 
 def build_animation(series_list, title):
     """Create a simple overlay animation for multiple trajectories."""
+    if plt is None or FuncAnimation is None or HTML is None:
+        raise RuntimeError("Animation support requires matplotlib and IPython.")
+
     downsampled = [
         (*downsample_series(t_vals, x_vals, y_vals), label)
         for t_vals, x_vals, y_vals, label in series_list
@@ -362,6 +375,9 @@ def print_summary(name, stats):
 
 def plot_series(y_series, xlabel, ylabel, title):
     """Plot one or more lines with the same axes."""
+    if plt is None:
+        raise RuntimeError("Plotting requires matplotlib.")
+
     plt.figure()
     for x_vals, y_vals, label in y_series:
         plt.plot(x_vals, y_vals, label=label)
@@ -375,6 +391,9 @@ def plot_series(y_series, xlabel, ylabel, title):
 
 def show_plot():
     """Show plots when possible, otherwise close them cleanly."""
+    if plt is None:
+        return
+
     if "agg" in plt.get_backend().lower():
         plt.close()
         return
@@ -517,6 +536,8 @@ def run_simulation():
     )
 
     dt_list, max_err_rk, max_err_eu = run_convergence_study(acceleration_with_drag)
+    if plt is None:
+        raise RuntimeError("Convergence plotting requires matplotlib.")
     plt.figure()
     plt.loglog(dt_list, max_err_rk, marker="o", label="RK4 max error")
     plt.loglog(dt_list, max_err_eu, marker="o", label="Euler max error")

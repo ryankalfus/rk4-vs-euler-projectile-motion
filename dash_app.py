@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 
 import dash
-import matplotlib
 import numpy as np
 import plotly.graph_objects as go
 from dash import Input, Output, State, dcc, html
 
 
 os.environ["MPLBACKEND"] = "Agg"
-matplotlib.use("Agg")
 
 ROOT = Path(__file__).resolve().parent
 SIM_PATH = ROOT / "projectile-motion-simulation.py"
@@ -27,6 +26,16 @@ CONTROL_SPECS = {
     "dt": {"min": 0.01, "max": 0.2, "step": 0.001, "default": 0.01},
     "drag-strength": {"min": 0.0, "max": 3.0, "step": 0.001, "default": 1.0},
     "tmax": {"min": 1.0, "max": 20.0, "step": 0.001, "default": 10.0},
+}
+
+TRACE_COLORS = {
+    "RK4": "#5b6cff",
+    "Euler": "#ef5b3f",
+    "Analytical": "#7b8794",
+    "RK4 max error": "#5b6cff",
+    "Euler max error": "#ef5b3f",
+    "RK4 vs analytical": "#5b6cff",
+    "Euler vs analytical": "#ef5b3f",
 }
 
 
@@ -99,13 +108,13 @@ def control_block(label, control_id):
                 className="control-label-row",
             ),
             dcc.Input(
-                type="range",
-                value=spec["default"],
                 id=control_id,
+                type="range",
                 min=spec["min"],
                 max=spec["max"],
                 step=spec["step"],
-                className="control-slider-native",
+                value=spec["default"],
+                className="control-slider",
             ),
         ],
         className="control-block",
@@ -189,6 +198,388 @@ def running_max(values):
     return np.maximum.accumulate(np.asarray(values, dtype=float))
 
 
+def apply_drag_strength(sim, drag_strength):
+    """Scale the default drag settings."""
+    sim.k_quad = 0.5 * sim.rho * sim.Cd * sim.A * float(drag_strength)
+
+
+def trace_color(label, index):
+    """Pick a stable color for a trace label."""
+    if label in TRACE_COLORS:
+        return TRACE_COLORS[label]
+    fallback = ["#5b6cff", "#ef5b3f", "#2a9d8f", "#7b8794"]
+    return fallback[index % len(fallback)]
+
+
+def build_animation_panel_html(series_list):
+    """Return a modern custom animation player as HTML."""
+    payload = []
+    x_max = 1.0
+    y_max = 1.0
+    t_max = 1.0
+
+    for t_vals, x_vals, y_vals, label, color in series_list:
+        t_arr = np.asarray(t_vals, dtype=float)
+        x_arr = np.asarray(x_vals, dtype=float)
+        y_arr = np.asarray(y_vals, dtype=float)
+        n_points = len(t_arr)
+        step = max(1, n_points // 320)
+        idx = np.arange(0, n_points, step, dtype=int)
+        if len(idx) == 0 or idx[-1] != n_points - 1:
+            idx = np.append(idx, n_points - 1)
+
+        t_use = t_arr[idx]
+        x_use = x_arr[idx]
+        y_use = y_arr[idx]
+        payload.append(
+            {
+                "label": label,
+                "color": color,
+                "t": np.round(t_use, 4).tolist(),
+                "x": np.round(x_use, 4).tolist(),
+                "y": np.round(y_use, 4).tolist(),
+            }
+        )
+        if len(x_use):
+            x_max = max(x_max, float(np.max(x_use)))
+            y_max = max(y_max, float(np.max(y_use)))
+            t_max = max(t_max, float(t_use[-1]))
+
+    data_json = json.dumps(payload)
+    accent = "#4f6af0"
+
+    return f"""<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body {{
+      margin: 0;
+      font-family: "Avenir Next", Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at top left, #f7fbff, #eef4fb 45%, #e5edf7 100%);
+      color: #183153;
+    }}
+    .wrap {{
+      height: 100vh;
+      box-sizing: border-box;
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 14px;
+    }}
+    .topbar, .footer {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid rgba(198, 211, 226, 0.9);
+      border-radius: 18px;
+      backdrop-filter: blur(10px);
+    }}
+    .title {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.06rem;
+    }}
+    .chip {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid rgba(198, 211, 226, 0.9);
+      font-size: 0.92rem;
+    }}
+    .dot {{
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: {accent};
+      display: inline-block;
+    }}
+    .legend {{
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }}
+    .legend-item {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+    }}
+    .scene {{
+      position: relative;
+      overflow: hidden;
+      border-radius: 26px;
+      border: 1px solid rgba(198, 211, 226, 0.9);
+      background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(243,247,252,0.95) 62%, rgba(232,239,247,1) 100%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.85);
+    }}
+    svg {{
+      width: 100%;
+      height: 100%;
+      display: block;
+    }}
+    .footer {{
+      display: grid;
+      grid-template-rows: auto auto;
+      gap: 14px;
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }}
+    .scrub-row {{
+      display: block;
+      width: 100%;
+      min-width: 0;
+    }}
+    .controls-row {{
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      width: 100%;
+    }}
+    button {{
+      border: none;
+      border-radius: 12px;
+      padding: 10px 14px;
+      background: #15345b;
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+      width: 96px;
+      height: 40px;
+      box-sizing: border-box;
+      font-size: 0.96rem;
+    }}
+    button.secondary {{
+      background: white;
+      color: #15345b;
+      border: 1px solid rgba(198, 211, 226, 0.9);
+    }}
+    input[type="range"] {{
+      width: 100%;
+      min-width: 0;
+      accent-color: {accent};
+    }}
+    select {{
+      border-radius: 12px;
+      padding: 10px 12px;
+      border: 1px solid rgba(198, 211, 226, 0.9);
+      background: white;
+      color: #15345b;
+      font-weight: 700;
+      font-family: inherit;
+      width: 96px;
+      height: 40px;
+      box-sizing: border-box;
+      font-size: 0.96rem;
+    }}
+    .timebox {{
+      min-width: 92px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+    }}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="title">
+        <span class="dot"></span>
+        <span>2D Flight Comparison</span>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="scene">
+      <svg id="scene" viewBox="0 0 1200 620" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div class="footer">
+      <div class="scrub-row">
+        <input id="scrubber" type="range" min="0" max="1000" value="0" />
+      </div>
+      <div class="controls-row">
+        <button id="playBtn">Pause</button>
+        <button id="resetBtn" class="secondary">Restart</button>
+        <select id="speedSelect" aria-label="Animation speed">
+          <option value="0.25">0.25x</option>
+          <option value="0.5">0.5x</option>
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+          <option value="1.75">1.75x</option>
+          <option value="2">2x</option>
+        </select>
+        <div class="timebox" id="timebox">00:00.00</div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const series = {data_json};
+    const xMax = {x_max:.6f};
+    const yMax = {y_max:.6f};
+    const tMax = {t_max:.6f};
+    const svg = document.getElementById("scene");
+    const legend = document.getElementById("legend");
+    const scrubber = document.getElementById("scrubber");
+    const playBtn = document.getElementById("playBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const speedSelect = document.getElementById("speedSelect");
+    const timebox = document.getElementById("timebox");
+    let playing = true;
+    let simTime = 0;
+    let lastStamp = null;
+    let playbackRate = 1;
+    const margin = {{ left: 72, right: 40, top: 40, bottom: 70 }};
+    const width = 1200;
+    const height = 620;
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+
+    const xToPx = (x) => margin.left + (x / Math.max(xMax, 1e-6)) * plotWidth;
+    const yToPx = (y) => height - margin.bottom - (y / Math.max(yMax, 1e-6)) * plotHeight;
+
+    function fmt(seconds) {{
+      const totalHundredths = Math.round(seconds * 100);
+      const minutes = Math.floor(totalHundredths / 6000);
+      const rem = totalHundredths % 6000;
+      const secs = Math.floor(rem / 100);
+      const hundredths = rem % 100;
+      return String(minutes).padStart(2, "0") + ":" + String(secs).padStart(2, "0") + "." + String(hundredths).padStart(2, "0");
+    }}
+
+    function interp(item, t) {{
+      if (t <= item.t[0]) return {{ x: item.x[0], y: item.y[0], end: 0 }};
+      if (t >= item.t[item.t.length - 1]) {{
+        return {{ x: item.x[item.x.length - 1], y: item.y[item.y.length - 1], end: item.t.length - 1 }};
+      }}
+      let i = 1;
+      while (i < item.t.length && item.t[i] < t) i++;
+      const t0 = item.t[i - 1], t1 = item.t[i];
+      const r = (t - t0) / (t1 - t0 || 1);
+      return {{
+        x: item.x[i - 1] + r * (item.x[i] - item.x[i - 1]),
+        y: item.y[i - 1] + r * (item.y[i] - item.y[i - 1]),
+        end: i
+      }};
+    }}
+
+    function make(tag, attrs = {{}}, parent = svg) {{
+      const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+      Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
+      parent.appendChild(node);
+      return node;
+    }}
+
+    make("rect", {{ x: 0, y: 0, width, height, fill: "transparent" }});
+    make("rect", {{
+      x: 0, y: yToPx(0), width, height: height - yToPx(0), fill: "rgba(120, 172, 110, 0.18)"
+    }});
+    make("line", {{
+      x1: margin.left - 20, x2: width - margin.right + 20,
+      y1: yToPx(0), y2: yToPx(0),
+      stroke: "#577a57", "stroke-width": 4
+    }});
+
+    for (let i = 0; i <= 5; i++) {{
+      const x = margin.left + (plotWidth * i / 5);
+      make("line", {{
+        x1: x, x2: x, y1: margin.top, y2: height - margin.bottom,
+        stroke: "rgba(117, 142, 173, 0.14)", "stroke-width": 1
+      }});
+    }}
+
+    const layers = series.map((item) => {{
+      const trail = make("path", {{
+        fill: "none", stroke: item.color, "stroke-width": 5, "stroke-linecap": "round", opacity: 0.35
+      }});
+      const glow = make("circle", {{ r: 18, fill: item.color, opacity: 0.12 }});
+      const ball = make("circle", {{ r: 11, fill: item.color, stroke: "white", "stroke-width": 3 }});
+      const chip = document.createElement("span");
+      chip.className = "legend-item";
+      chip.innerHTML = `<span class="dot" style="background:${{item.color}}"></span><span>${{item.label}}</span>`;
+      legend.appendChild(chip);
+      return {{ trail, glow, ball }};
+    }});
+
+    function render(t) {{
+      series.forEach((item, idx) => {{
+        const frame = interp(item, t);
+        const end = Math.max(1, frame.end);
+        const pts = [];
+        for (let i = 0; i < end; i++) {{
+          pts.push(`${{xToPx(item.x[i]).toFixed(2)}},${{yToPx(item.y[i]).toFixed(2)}}`);
+        }}
+        pts.push(`${{xToPx(frame.x).toFixed(2)}},${{yToPx(frame.y).toFixed(2)}}`);
+        layers[idx].trail.setAttribute("d", "M " + pts.join(" L "));
+        layers[idx].glow.setAttribute("cx", xToPx(frame.x));
+        layers[idx].glow.setAttribute("cy", yToPx(frame.y));
+        layers[idx].ball.setAttribute("cx", xToPx(frame.x));
+        layers[idx].ball.setAttribute("cy", yToPx(frame.y));
+      }});
+      timebox.textContent = fmt(t);
+      scrubber.value = Math.round((t / Math.max(tMax, 1e-6)) * 1000);
+    }}
+
+    function tick(stamp) {{
+      if (lastStamp === null) lastStamp = stamp;
+      const dt = (stamp - lastStamp) / 1000;
+      lastStamp = stamp;
+      if (playing) {{
+        simTime = Math.min(tMax, simTime + dt * playbackRate);
+        render(simTime);
+        if (simTime >= tMax) {{
+          playing = false;
+          playBtn.textContent = "Play";
+        }}
+      }}
+      requestAnimationFrame(tick);
+    }}
+
+    playBtn.addEventListener("click", () => {{
+      playing = !playing;
+      playBtn.textContent = playing ? "Pause" : "Play";
+      lastStamp = null;
+    }});
+
+    resetBtn.addEventListener("click", () => {{
+      simTime = 0;
+      playing = true;
+      playBtn.textContent = "Pause";
+      lastStamp = null;
+      render(simTime);
+    }});
+
+    speedSelect.addEventListener("change", (event) => {{
+      playbackRate = Number(event.target.value) || 1;
+    }});
+
+    scrubber.addEventListener("input", (event) => {{
+      simTime = (Number(event.target.value) / 1000) * tMax;
+      playing = false;
+      playBtn.textContent = "Play";
+      lastStamp = null;
+      render(simTime);
+    }});
+
+    render(0);
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>"""
+
+
 def make_figure(
     series,
     xlabel,
@@ -204,14 +595,21 @@ def make_figure(
     prepared = prepare_series(series, log_x=log_x, log_y=log_y)
 
     fig = go.Figure()
-    for x_vals, y_vals, label in prepared:
+    for idx, (x_vals, y_vals, label) in enumerate(prepared):
+        color = trace_color(label, idx)
         fig.add_trace(
-            go.Scattergl(
+            go.Scatter(
                 x=x_vals,
                 y=y_vals,
                 mode="lines",
                 name=label,
-                line={"width": 3},
+                line={"width": 3, "color": color},
+                hovertemplate="(%{x:.4g}, %{y:.4g})<extra></extra>",
+                hoverlabel={
+                    "font": {"color": color, "size": 13},
+                    "bgcolor": "rgba(255,255,255,0)",
+                    "bordercolor": "rgba(255,255,255,0)",
+                },
             )
         )
 
@@ -242,6 +640,7 @@ def make_figure(
             "yanchor": "top",
             "font": {"size": 12},
         },
+        hoverlabel={"namelength": 0},
     )
     fig.update_xaxes(
         title=xlabel,
@@ -263,7 +662,7 @@ def make_figure(
     return fig
 
 
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, assets_folder=str(ROOT / "assets"))
 server = app.server
 
 app.layout = html.Div(
@@ -310,6 +709,22 @@ app.layout = html.Div(
                 html.Div(id="summary-cards"),
                 html.Div(
                     [
+                        html.Div("Animation", className="animation-title"),
+                        html.Iframe(
+                            id="animation-frame",
+                            style={
+                                "width": "100%",
+                                "height": "620px",
+                                "border": "none",
+                                "borderRadius": "22px",
+                                "background": "transparent",
+                            },
+                        ),
+                    ],
+                    className="animation-shell",
+                ),
+                html.Div(
+                    [
                         graph_card("trajectory-graph"),
                         graph_card("speed-graph"),
                         graph_card("height-graph"),
@@ -326,18 +741,8 @@ app.layout = html.Div(
                     [
                         graph_card("analytical-summary")
                     ],
+                    id="analytical-wrap",
                     style={"marginTop": "18px"},
-                ),
-                html.H2("Animation", style={"marginTop": "24px"}),
-                html.Iframe(
-                    id="animation-frame",
-                    style={
-                        "width": "100%",
-                        "height": "620px",
-                        "border": "1px solid #d9e2ec",
-                        "borderRadius": "12px",
-                        "background": "white",
-                    },
                 ),
             ],
             className="content-panel",
@@ -430,6 +835,7 @@ def sync_controls(
     Output("height-graph", "figure"),
     Output("error-graph", "figure"),
     Output("analytical-summary", "figure"),
+    Output("analytical-wrap", "style"),
     Output("animation-frame", "srcDoc"),
     Input("run-button", "n_clicks"),
     State("theta", "value"),
@@ -449,7 +855,7 @@ def update_view(_n_clicks, theta_deg, v0, y0, dt, drag_strength, t_max, drag_val
     sim.dt = float(dt)
     sim.t_max = float(t_max)
     sim.use_quadratic_drag = "drag" in (drag_values or [])
-    sim.k_quad *= float(drag_strength)
+    apply_drag_strength(sim, drag_strength)
 
     t_rk, x_rk, y_rk, vx_rk, vy_rk = sim.simulate(sim.acceleration_with_drag, sim.rk4_step)
     t_eu, x_eu, y_eu, vx_eu, vy_eu = sim.simulate(sim.acceleration_with_drag, sim.euler_step)
@@ -511,10 +917,9 @@ def update_view(_n_clicks, theta_deg, v0, y0, dt, drag_strength, t_max, drag_val
     analytical_figure.update_yaxes(visible=False)
 
     animation_series = [
-        (t_rk, x_rk, y_rk, "RK4"),
-        (t_eu, x_eu, y_eu, "Euler"),
+        (t_rk, x_rk, y_rk, "RK4", "#5b6cff"),
+        (t_eu, x_eu, y_eu, "Euler", "#ef5b3f"),
     ]
-    animation_title = "RK4 vs Euler"
 
     if has_analytical and analytical_results is not None:
         t_rk_an, err_rk_vs_an = sim.position_error_vs_time(t_rk, x_rk, y_rk, t_an, x_an, y_an)
@@ -537,7 +942,7 @@ def update_view(_n_clicks, theta_deg, v0, y0, dt, drag_strength, t_max, drag_val
     )
     dt_ticktext = [f"{dt_i:g}" for dt_i in dt_list]
 
-    animation_html = sim.build_animation(animation_series, animation_title).data
+    animation_html = build_animation_panel_html(animation_series)
 
     return (
         summary_children,
@@ -558,6 +963,7 @@ def update_view(_n_clicks, theta_deg, v0, y0, dt, drag_strength, t_max, drag_val
             x_ticktext=dt_ticktext,
         ),
         analytical_figure,
+        {"marginTop": "18px"} if has_analytical else {"display": "none"},
         animation_html,
     )
 
