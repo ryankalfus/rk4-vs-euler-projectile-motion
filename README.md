@@ -1,125 +1,96 @@
-# RK4 vs Euler Projectile Motion
+# Projectile Motion
 
-This project compares two numerical methods for 2D projectile motion:
+This project compares `Euler` and `RK4` for 2D projectile motion.
 
-- `Euler`
-- `RK4` (fourth-order Runge-Kutta)
+It includes:
 
-It can run in two physics modes:
+- a local Dash app with sliders, plots, and animation
+- a public Vercel version
+- the original Python simulation script
+- a notebook version for Jupyter
 
-- `use_quadratic_drag = True`: projectile motion with air resistance
-- `use_quadratic_drag = False`: projectile motion without drag, plus an exact analytical reference
+## Live site
 
-## What the script does
+Public app:
 
-The main script is [`projectile-motion-simulation.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/projectile-motion-simulation.py). It:
+- [rk4-vs-euler-projectile-motion.vercel.app](https://rk4-vs-euler-projectile-motion.vercel.app)
 
-- simulates the projectile with Euler and RK4
-- plots trajectory, speed, and height
-- compares error over time against a high-resolution RK4 reference
-- makes a log-log convergence plot of max error vs timestep size
-- shows an animation overlay of the trajectories
+Vercel project:
 
-When drag is off, it also compares both numerical methods to the closed-form solution.
+- [vercel.com/ryansamuelkalfus-2592s-projects/rk4-vs-euler-projectile-motion](https://vercel.com/ryansamuelkalfus-2592s-projects/rk4-vs-euler-projectile-motion)
 
-## Project files
+## Main files
 
-- [`projectile-motion-simulation.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/projectile-motion-simulation.py): main simulation and plotting code
-- [`simulation-notebook.ipynb`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/simulation-notebook.ipynb): easiest way to run the simulation and view plots inline in Jupyter
-- [`streamlit_app.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/streamlit_app.py): interactive browser app with sliders and plots
-- [`images/`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/images): saved example plots and animation screenshots
-- [`ryan-professor-02-17-2026.md`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/ryan-professor-02-17-2026.md): notes/transcript from a project discussion
+- [`dash_app.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/dash_app.py): main interactive app
+- [`projectile-motion-simulation.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/projectile-motion-simulation.py): core simulation math and original plotting/animation code
+- [`simulation-notebook.ipynb`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/simulation-notebook.ipynb): notebook version
+- [`api/index.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/api/index.py): Vercel Python entrypoint
+- [`vercel.json`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/vercel.json): Vercel routing config
 
-## Requirements
+## What the app shows
 
-- Python 3
-- NumPy
-- Matplotlib
-- IPython
-- Streamlit
+- projectile trajectory
+- speed vs time
+- height vs time
+- convergence plot: max error vs timestep size
+- animation comparing `RK4` and `Euler`
 
-Install the packages with:
+When air resistance is off, it also shows distance from the analytical solution.
 
-```bash
-pip install numpy matplotlib ipython streamlit
-```
+## Local run
 
-## How to run it
-
-### Faster browser app: Dash
-
-If Streamlit feels laggy, run the Dash app instead:
+Install the app dependencies:
 
 ```bash
-./.venv/bin/python dash_app.py
+python3 -m pip install -r requirements.txt
 ```
 
-Then open `http://localhost:8050`.
-
-### Most interactive option: run the browser app
-
-If you want sliders and a clean browser view, run:
+Run the Dash app:
 
 ```bash
-streamlit run streamlit_app.py
+python3 dash_app.py
 ```
 
-The app lets you change:
+Then open:
+
+```text
+http://127.0.0.1:8050
+```
+
+## Optional notebook / script extras
+
+If you also want to run the original script or notebook with Matplotlib plots and notebook animation, install:
+
+```bash
+python3 -m pip install matplotlib ipython notebook
+```
+
+Run the script:
+
+```bash
+python3 projectile-motion-simulation.py
+```
+
+Or open Jupyter:
+
+```bash
+jupyter notebook
+```
+
+## Physics settings
+
+You can change:
 
 - launch angle
 - initial speed
 - initial height
-- timestep size
+- timestep `dt`
+- drag coefficient
 - max simulation time
 - air resistance on/off
 
-It shows:
-
-- summary numbers
-- trajectory plot
-- speed plot
-- height plot
-- error plot
-- convergence plot
-- animation
-
-You can run the script from this folder:
-
-```bash
-python projectile-motion-simulation.py
-```
-
-You can also run it in Jupyter if you want the animation embedded in a notebook.
-
-### Cleaner option: run the notebook
-
-If you want the outputs in one place, open the notebook:
-
-```bash
-python3 -m pip install notebook numpy matplotlib ipython
-jupyter notebook
-```
-
-Then open [`simulation-notebook.ipynb`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/simulation-notebook.ipynb) and run the code cell.
-
-## Settings you can change
-
-Near the top of the script, you can adjust:
-
-- `theta_deg`
-- `v0`
-- `y0`
-- `dt`
-- `t_max`
-- `use_quadratic_drag`
-
-## Reading the results
-
-- Euler is expected to be less accurate, especially for larger timestep sizes.
-- RK4 is expected to stay much closer to the reference solution.
-- On the log-log error plot, Euler should look close to first-order and RK4 should look close to fourth-order.
-
 ## Notes
 
-- The analytical solution only appears when drag is off.
-- Some RK4 and analytical curves may overlap so closely that they look like one line.
+- `Euler` should be less accurate than `RK4`, especially at larger timesteps.
+- On the log-log convergence plot, `Euler` should be near first-order and `RK4` should be near fourth-order.
+- The deployed Vercel app uses the Dash version, not the old Streamlit version.
