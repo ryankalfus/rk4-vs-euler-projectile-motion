@@ -2,42 +2,29 @@
 
 This project compares `Euler` and `RK4` for 2D projectile motion.
 
-It includes:
+The main app is built with `Dash` and includes:
 
-- a local Dash app with sliders, plots, and animation
-- a public Vercel version
-- the original Python simulation script
-- a notebook version for Jupyter
+- sliders for the launch settings
+- a 2D flight animation
+- trajectory, speed, and height plots
+- a convergence plot for timestep error
+- an analytical comparison when air resistance is off
 
-## Live site
+## Live Site
 
-Public app:
+- Public app: [rk4-vs-euler-projectile-motion.vercel.app](https://rk4-vs-euler-projectile-motion.vercel.app)
+- Vercel project: [ryansamuelkalfus-2592s-projects/rk4-vs-euler-projectile-motion](https://vercel.com/ryansamuelkalfus-2592s-projects/rk4-vs-euler-projectile-motion)
 
-- [rk4-vs-euler-projectile-motion.vercel.app](https://rk4-vs-euler-projectile-motion.vercel.app)
+## Main Files
 
-Vercel project:
-
-- [vercel.com/ryansamuelkalfus-2592s-projects/rk4-vs-euler-projectile-motion](https://vercel.com/ryansamuelkalfus-2592s-projects/rk4-vs-euler-projectile-motion)
-
-## Main files
-
-- [`dash_app.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/dash_app.py): main interactive app
-- [`projectile-motion-simulation.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/projectile-motion-simulation.py): core simulation math and original plotting/animation code
+- [`dash_app.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/dash_app.py): interactive Dash app
+- [`projectile-motion-simulation.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/projectile-motion-simulation.py): simulation math and optional notebook/plot helpers
 - [`simulation-notebook.ipynb`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/simulation-notebook.ipynb): notebook version
 - [`api/index.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/api/index.py): Vercel Python entrypoint
 - [`vercel.json`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/vercel.json): Vercel routing config
+- [`assets/app.css`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/assets/app.css): app styling
 
-## What the app shows
-
-- projectile trajectory
-- speed vs time
-- height vs time
-- convergence plot: max error vs timestep size
-- animation comparing `RK4` and `Euler`
-
-When air resistance is off, it also shows distance from the analytical solution.
-
-## Local run
+## Run Locally
 
 Install the app dependencies:
 
@@ -45,7 +32,7 @@ Install the app dependencies:
 python3 -m pip install -r requirements.txt
 ```
 
-Run the Dash app:
+Start the app:
 
 ```bash
 python3 dash_app.py
@@ -57,9 +44,11 @@ Then open:
 http://127.0.0.1:8050
 ```
 
-## Optional notebook / script extras
+## Optional Notebook / Script Setup
 
-If you also want to run the original script or notebook with Matplotlib plots and notebook animation, install:
+The deployed app only needs the packages in [`requirements.txt`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/requirements.txt).
+
+If you also want to run the original script with Matplotlib plots or use the notebook, install:
 
 ```bash
 python3 -m pip install matplotlib ipython notebook
@@ -71,13 +60,13 @@ Run the script:
 python3 projectile-motion-simulation.py
 ```
 
-Or open Jupyter:
+Open Jupyter:
 
 ```bash
 jupyter notebook
 ```
 
-## Physics settings
+## Controls
 
 You can change:
 
@@ -89,8 +78,23 @@ You can change:
 - max simulation time
 - air resistance on/off
 
-## Notes
+## How To Read The Results
 
-- `Euler` should be less accurate than `RK4`, especially at larger timesteps.
-- On the log-log convergence plot, `Euler` should be near first-order and `RK4` should be near fourth-order.
-- The deployed Vercel app uses the Dash version, not the old Streamlit version.
+- `Euler` is simpler but less accurate.
+- `RK4` should stay much closer to the correct trajectory.
+- On the log-log convergence plot, `Euler` should be close to first-order.
+- On the same plot, `RK4` should be close to fourth-order.
+- The analytical comparison only appears when air resistance is off.
+
+## Deployment
+
+This project is deployed on Vercel using:
+
+- [`api/index.py`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/api/index.py) as the Python entrypoint
+- [`vercel.json`](/Users/ryankalfus/Downloads/codex-projects/rk4-vs-euler-projectile-motion/vercel.json) for routing
+
+To redeploy from this folder:
+
+```bash
+npx vercel deploy --prod --yes
+```
