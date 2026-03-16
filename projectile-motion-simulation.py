@@ -441,61 +441,6 @@ def run_convergence_study(accel_func):
     return dt_list, np.array(max_err_rk, dtype=float), np.array(max_err_eu, dtype=float)
 
 
-def chi_squared_from_error(err_vals):
-    """Return a simple chi-squared style score from position error samples."""
-    err_arr = np.asarray(err_vals, dtype=float)
-    return float(np.sum(err_arr**2))
-
-
-def run_reference_chi_squared_study(
-    accel_func,
-    reference_dt=1e-4,
-    *,
-    dt_list=None,
-    stop_at_ground=True,
-):
-    """Compare Euler and RK4 against a fine-step RK4 reference."""
-    if dt_list is None:
-        dt_list = np.array([0.2, 0.1, 0.05, 0.025, 0.0125], dtype=float)
-    else:
-        dt_list = np.asarray(dt_list, dtype=float)
-
-    chi_sq_rk = []
-    chi_sq_eu = []
-
-    t_ref, x_ref, y_ref, _, _ = simulate_with_dt(
-        accel_func,
-        rk4_step,
-        float(reference_dt),
-        t_max,
-        stop_at_ground=stop_at_ground,
-    )
-
-    for dti in dt_list:
-        t_rk, x_rk, y_rk, _, _ = simulate_with_dt(
-            accel_func,
-            rk4_step,
-            float(dti),
-            t_max,
-            stop_at_ground=stop_at_ground,
-        )
-        t_eu, x_eu, y_eu, _, _ = simulate_with_dt(
-            accel_func,
-            euler_step,
-            float(dti),
-            t_max,
-            stop_at_ground=stop_at_ground,
-        )
-
-        _, err_rk = position_error_vs_time(t_rk, x_rk, y_rk, t_ref, x_ref, y_ref)
-        _, err_eu = position_error_vs_time(t_eu, x_eu, y_eu, t_ref, x_ref, y_ref)
-
-        chi_sq_rk.append(chi_squared_from_error(err_rk))
-        chi_sq_eu.append(chi_squared_from_error(err_eu))
-
-    return dt_list, np.array(chi_sq_rk, dtype=float), np.array(chi_sq_eu, dtype=float)
-
-
 def estimate_slope(x_vals, y_vals):
     """Estimate the log-log slope for positive finite values."""
     mask = np.isfinite(y_vals) & (y_vals > 0)
@@ -606,26 +551,6 @@ def run_simulation():
     print("\nEstimated convergence order from log-log slope:")
     print(f"RK4 slope   ≈ {estimate_slope(dt_list, max_err_rk):.3f}")
     print(f"Euler slope ≈ {estimate_slope(dt_list, max_err_eu):.3f}")
-
-    if use_quadratic_drag:
-        dt_chi, chi_sq_rk, chi_sq_eu = run_reference_chi_squared_study(
-            acceleration_with_drag,
-            reference_dt=1e-4,
-            stop_at_ground=True,
-        )
-        plt.figure()
-        plt.loglog(dt_chi, chi_sq_rk, marker="o", label="RK4 chi-squared")
-        plt.loglog(dt_chi, chi_sq_eu, marker="o", label="Euler chi-squared")
-        plt.xlabel("timestep dt (s)")
-        plt.ylabel("chi-squared")
-        plt.title("Chi-Squared vs Timestep Size (relative to RK4 dt = 0.0001)")
-        plt.legend()
-        plt.grid(True, which="both")
-        show_plot()
-
-        print("\nEstimated chi-squared slope from log-log fit:")
-        print(f"RK4 chi-squared slope   ≈ {estimate_slope(dt_chi, chi_sq_rk):.3f}")
-        print(f"Euler chi-squared slope ≈ {estimate_slope(dt_chi, chi_sq_eu):.3f}")
 
     if has_analytical and analytical_results is not None:
         t_an, x_an, y_an, vx_an, vy_an = analytical_results

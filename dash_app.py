@@ -36,8 +36,6 @@ TRACE_COLORS = {
     "Euler max error": "#ef5b3f",
     "RK4 vs analytical": "#5b6cff",
     "Euler vs analytical": "#ef5b3f",
-    "RK4 chi-squared": "#5b6cff",
-    "Euler chi-squared": "#ef5b3f",
 }
 
 
@@ -935,30 +933,6 @@ def update_view(_n_clicks, theta_deg, v0, y0, dt, drag_strength, t_max, drag_val
             "position error (m)",
             "Distance From Analytical",
         )
-    else:
-        dt_chi, chi_sq_rk, chi_sq_eu = sim.run_reference_chi_squared_study(
-            sim.acceleration_with_drag,
-            reference_dt=1e-4,
-            stop_at_ground=True,
-        )
-        chi_slope_rk = sim.estimate_slope(dt_chi, chi_sq_rk)
-        chi_slope_eu = sim.estimate_slope(dt_chi, chi_sq_eu)
-        analytical_figure = make_figure(
-            [
-                (dt_chi, chi_sq_rk, "RK4 chi-squared"),
-                (dt_chi, chi_sq_eu, "Euler chi-squared"),
-            ],
-            "timestep dt (s)",
-            "chi-squared",
-            (
-                "Chi-Squared vs Timestep Size (log-log) | "
-                f"RK4 slope {chi_slope_rk:.2f}, Euler slope {chi_slope_eu:.2f}"
-            ),
-            log_x=True,
-            log_y=True,
-            x_tickvals=dt_chi,
-            x_ticktext=[f"{dt_i:g}" for dt_i in dt_chi],
-        )
     dt_list, max_err_rk, max_err_eu = sim.run_convergence_study(sim.acceleration_with_drag)
     slope_rk = sim.estimate_slope(dt_list, max_err_rk)
     slope_eu = sim.estimate_slope(dt_list, max_err_eu)
@@ -989,7 +963,7 @@ def update_view(_n_clicks, theta_deg, v0, y0, dt, drag_strength, t_max, drag_val
             x_ticktext=dt_ticktext,
         ),
         analytical_figure,
-        {"marginTop": "18px"},
+        {"marginTop": "18px"} if has_analytical else {"display": "none"},
         animation_html,
     )
 
