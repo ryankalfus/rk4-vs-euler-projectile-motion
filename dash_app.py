@@ -3,17 +3,31 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 
 import dash
+import matplotlib
 import numpy as np
 import plotly.graph_objects as go
-from dash import Input, Output, dcc, html
+from dash import Input, Output, State, dcc, html
 
+
+os.environ["MPLBACKEND"] = "Agg"
+matplotlib.use("Agg")
 
 ROOT = Path(__file__).resolve().parent
 SIM_PATH = ROOT / "projectile-motion-simulation.py"
 PLOT_HEIGHT = 360
+
+CONTROL_SPECS = {
+    "theta": {"min": 5.0, "max": 85.0, "step": 0.001, "default": 45.0},
+    "v0": {"min": 1.0, "max": 60.0, "step": 0.001, "default": 20.0},
+    "y0": {"min": 0.0, "max": 20.0, "step": 0.001, "default": 0.0},
+    "dt": {"min": 0.01, "max": 0.2, "step": 0.001, "default": 0.1},
+    "drag-strength": {"min": 0.0, "max": 3.0, "step": 0.001, "default": 1.0},
+    "tmax": {"min": 1.0, "max": 20.0, "step": 0.001, "default": 10.0},
+}
 
 
 def load_simulation_module():
@@ -65,6 +79,76 @@ def metric_block(label, value):
     )
 
 
+def control_block(label, control_id):
+    """Render one slider control with an editable value box."""
+    spec = CONTROL_SPECS[control_id]
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Span(label),
+                    dcc.Input(
+                        id=f"{control_id}-input",
+                        type="number",
+                        value=spec["default"],
+                        step=0.001,
+                        debounce=True,
+                        className="control-input",
+                    ),
+                ],
+                className="control-label-row",
+            ),
+            dcc.Slider(
+                spec["min"],
+                spec["max"],
+                spec["step"],
+                value=spec["default"],
+                id=control_id,
+                marks=None,
+                updatemode="drag",
+                className="control-slider",
+            ),
+        ],
+        className="control-block",
+    )
+
+
+def graph_card(graph_id):
+    """Wrap a graph in a simple card."""
+    return html.Div(
+        [
+            dcc.Graph(
+                id=graph_id,
+                config={
+                    "displaylogo": False,
+                    "displayModeBar": "hover",
+                    "scrollZoom": False,
+                    "doubleClick": False,
+                    "modeBarButtonsToRemove": [
+                        "select2d",
+                        "lasso2d",
+                        "autoScale2d",
+                        "resetScale2d",
+                        "hoverClosestCartesian",
+                        "hoverCompareCartesian",
+                        "toggleSpikelines",
+                        "toImage",
+                    ],
+                },
+                style={"height": f"{PLOT_HEIGHT}px"},
+            )
+        ],
+        style={
+            "background": "white",
+            "border": "1px solid #d9e2ec",
+            "borderRadius": "12px",
+            "padding": "10px 12px 0 12px",
+            "boxShadow": "0 2px 10px rgba(15, 23, 42, 0.05)",
+            "overflow": "hidden",
+        },
+    )
+
+
 def prepare_series(series, log_x=False, log_y=False):
     """Filter data for plotting."""
     prepared = []
@@ -99,7 +183,12 @@ def axis_range(values, log_scale=False, pad_fraction=0.06):
     return [v_min - pad, v_max + pad]
 
 
-def make_figure(series, xlabel, ylabel, title, *, log_x=False, log_y=False, show_rangeslider=False):
+def running_max(values):
+    """Return the running maximum of a 1D array."""
+    return np.maximum.accumulate(np.asarray(values, dtype=float))
+
+
+def make_figure(series, xlabel, ylabel, title, *, log_x=False, log_y=False):
     """Build one fast Plotly figure."""
     prepared = prepare_series(series, log_x=log_x, log_y=log_y)
 
@@ -121,27 +210,25 @@ def make_figure(series, xlabel, ylabel, title, *, log_x=False, log_y=False, show
     y_all = np.concatenate(y_arrays) if y_arrays else np.array([], dtype=float)
 
     fig.update_layout(
-        title=title,
         template="plotly_white",
         height=PLOT_HEIGHT,
-        margin={"l": 56, "r": 24, "t": 56, "b": 48},
+        margin={"l": 64, "r": 28, "t": 72, "b": 60},
         dragmode="zoom",
         hovermode="closest",
         legend={
             "orientation": "h",
             "yanchor": "bottom",
-            "y": 1.02,
+            "y": 1.03,
             "xanchor": "left",
             "x": 0,
         },
-        uirevision=title,
+        title={"text": title, "x": 0.02, "xanchor": "left"},
     )
     fig.update_xaxes(
         title=xlabel,
         showgrid=True,
         zeroline=False,
         type="log" if log_x else "linear",
-        rangeslider={"visible": show_rangeslider and not log_x},
         range=axis_range(x_all, log_scale=log_x),
     )
     fig.update_yaxes(
@@ -164,90 +251,47 @@ app.layout = html.Div(
                 html.H1("Projectile Motion Explorer", style={"marginTop": "0"}),
                 html.Div(
                     [
-                        html.Label("Launch angle (degrees)"),
-                        dcc.Slider(5, 85, 1, value=45, id="theta", updatemode="mouseup"),
-                        html.Label("Initial speed (m/s)", style={"marginTop": "18px"}),
-                        dcc.Slider(1, 60, 0.5, value=20, id="v0", updatemode="mouseup"),
-                        html.Label("Initial height (m)", style={"marginTop": "18px"}),
-                        dcc.Slider(0, 20, 0.5, value=0, id="y0", updatemode="mouseup"),
-                        html.Label("Time step dt (s)", style={"marginTop": "18px"}),
-                        dcc.RadioItems(
-                            id="dt",
-                            options=[
-                                {"label": "0.2", "value": 0.2},
-                                {"label": "0.1", "value": 0.1},
-                                {"label": "0.05", "value": 0.05},
-                                {"label": "0.025", "value": 0.025},
-                                {"label": "0.0125", "value": 0.0125},
-                            ],
-                            value=0.1,
-                            inline=True,
-                            inputStyle={"marginLeft": "8px", "marginRight": "4px"},
-                        ),
-                        html.Label("Max simulation time (s)", style={"marginTop": "18px"}),
-                        dcc.Slider(1, 20, 0.5, value=10, id="tmax", updatemode="mouseup"),
+                        control_block("Launch angle (degrees)", "theta"),
+                        control_block("Initial speed (m/s)", "v0"),
+                        control_block("Initial height (m)", "y0"),
+                        control_block("Time step dt (s)", "dt"),
+                        control_block("Air resistance strength", "drag-strength"),
+                        control_block("Max simulation time (s)", "tmax"),
                         dcc.Checklist(
                             id="drag",
                             options=[{"label": "Use air resistance", "value": "drag"}],
                             value=["drag"],
-                            style={"marginTop": "18px"},
+                            className="drag-checklist",
+                        ),
+                        html.Button(
+                            "Run Simulation",
+                            id="run-button",
+                            n_clicks=0,
+                            style={
+                                "marginTop": "20px",
+                                "padding": "10px 14px",
+                                "borderRadius": "10px",
+                                "border": "none",
+                                "background": "#1f77b4",
+                                "color": "white",
+                                "fontWeight": "600",
+                                "cursor": "pointer",
+                            },
                         ),
                     ]
                 ),
             ],
-            style={
-                "width": "320px",
-                "padding": "24px",
-                "background": "#f8fafc",
-                "borderRight": "1px solid #d9e2ec",
-                "minHeight": "100vh",
-                "boxSizing": "border-box",
-                "position": "sticky",
-                "top": "0",
-                "alignSelf": "flex-start",
-            },
+            className="sidebar-panel",
         ),
         html.Div(
             [
                 html.Div(id="summary-cards"),
                 html.Div(
                     [
-                        dcc.Graph(
-                            id="trajectory-graph",
-                            config={
-                                "displaylogo": False,
-                                "scrollZoom": True,
-                                "doubleClick": "reset",
-                            },
-                            style={"height": f"{PLOT_HEIGHT}px"},
-                        ),
-                        dcc.Graph(
-                            id="speed-graph",
-                            config={
-                                "displaylogo": False,
-                                "scrollZoom": True,
-                                "doubleClick": "reset",
-                            },
-                            style={"height": f"{PLOT_HEIGHT}px"},
-                        ),
-                        dcc.Graph(
-                            id="height-graph",
-                            config={
-                                "displaylogo": False,
-                                "scrollZoom": True,
-                                "doubleClick": "reset",
-                            },
-                            style={"height": f"{PLOT_HEIGHT}px"},
-                        ),
-                        dcc.Graph(
-                            id="error-graph",
-                            config={
-                                "displaylogo": False,
-                                "scrollZoom": True,
-                                "doubleClick": "reset",
-                            },
-                            style={"height": f"{PLOT_HEIGHT}px"},
-                        ),
+                        graph_card("trajectory-graph"),
+                        graph_card("speed-graph"),
+                        graph_card("height-graph"),
+                        graph_card("error-graph"),
                     ],
                     style={
                         "display": "grid",
@@ -258,20 +302,10 @@ app.layout = html.Div(
                 ),
                 html.Div(
                     [
-                        dcc.Graph(
-                            id="convergence-graph",
-                            config={
-                                "displaylogo": False,
-                                "scrollZoom": True,
-                                "doubleClick": "reset",
-                            },
-                            style={"height": f"{PLOT_HEIGHT}px"},
-                        ),
-                        html.Div(id="slope-summary"),
+                        graph_card("analytical-summary")
                     ],
                     style={"marginTop": "18px"},
                 ),
-                html.Div(id="analytical-summary", style={"marginTop": "18px"}),
                 html.H2("Animation", style={"marginTop": "24px"}),
                 html.Iframe(
                     id="animation-frame",
@@ -284,11 +318,87 @@ app.layout = html.Div(
                     },
                 ),
             ],
-            style={"flex": "1", "padding": "24px", "background": "#eef2f6"},
+            className="content-panel",
         ),
     ],
-    style={"display": "flex", "fontFamily": "Avenir Next, Helvetica, Arial, sans-serif"},
+    className="app-shell",
 )
+
+
+@app.callback(
+    Output("theta", "value"),
+    Output("theta-input", "value"),
+    Output("v0", "value"),
+    Output("v0-input", "value"),
+    Output("y0", "value"),
+    Output("y0-input", "value"),
+    Output("dt", "value"),
+    Output("dt-input", "value"),
+    Output("drag-strength", "value"),
+    Output("drag-strength-input", "value"),
+    Output("tmax", "value"),
+    Output("tmax-input", "value"),
+    Input("theta", "value"),
+    Input("theta-input", "value"),
+    Input("v0", "value"),
+    Input("v0-input", "value"),
+    Input("y0", "value"),
+    Input("y0-input", "value"),
+    Input("dt", "value"),
+    Input("dt-input", "value"),
+    Input("drag-strength", "value"),
+    Input("drag-strength-input", "value"),
+    Input("tmax", "value"),
+    Input("tmax-input", "value"),
+)
+def sync_controls(
+    theta,
+    theta_input,
+    v0,
+    v0_input,
+    y0,
+    y0_input,
+    dt,
+    dt_input,
+    drag_strength,
+    drag_strength_input,
+    tmax,
+    tmax_input,
+):
+    """Keep sliders and editable inputs in sync."""
+    ctx = dash.callback_context
+    triggered = ctx.triggered_id
+
+    def normalize(control_id, slider_value, input_value):
+        spec = CONTROL_SPECS[control_id]
+        if triggered == f"{control_id}-input" and input_value is not None:
+            raw_value = input_value
+        elif slider_value is not None:
+            raw_value = slider_value
+        elif input_value is not None:
+            raw_value = input_value
+        else:
+            raw_value = spec["default"]
+
+        value = round(float(raw_value), 3)
+        value = min(spec["max"], max(spec["min"], value))
+        return value, value
+
+    theta_val = normalize("theta", theta, theta_input)
+    v0_val = normalize("v0", v0, v0_input)
+    y0_val = normalize("y0", y0, y0_input)
+    dt_val = normalize("dt", dt, dt_input)
+    drag_strength_val = normalize("drag-strength", drag_strength, drag_strength_input)
+    tmax_val = normalize("tmax", tmax, tmax_input)
+
+    return (
+        *theta_val,
+        *v0_val,
+        *y0_val,
+        *dt_val,
+        *drag_strength_val,
+        *tmax_val,
+    )
 
 
 @app.callback(
@@ -297,18 +407,18 @@ app.layout = html.Div(
     Output("speed-graph", "figure"),
     Output("height-graph", "figure"),
     Output("error-graph", "figure"),
-    Output("convergence-graph", "figure"),
-    Output("slope-summary", "children"),
-    Output("analytical-summary", "children"),
+    Output("analytical-summary", "figure"),
     Output("animation-frame", "srcDoc"),
-    Input("theta", "value"),
-    Input("v0", "value"),
-    Input("y0", "value"),
-    Input("dt", "value"),
-    Input("tmax", "value"),
-    Input("drag", "value"),
+    Input("run-button", "n_clicks"),
+    State("theta", "value"),
+    State("v0", "value"),
+    State("y0", "value"),
+    State("dt", "value"),
+    State("drag-strength", "value"),
+    State("tmax", "value"),
+    State("drag", "value"),
 )
-def update_view(theta_deg, v0, y0, dt, t_max, drag_values):
+def update_view(_n_clicks, theta_deg, v0, y0, dt, drag_strength, t_max, drag_values):
     """Update all outputs when controls change."""
     sim = load_simulation_module()
     sim.theta_deg = float(theta_deg)
@@ -317,6 +427,7 @@ def update_view(theta_deg, v0, y0, dt, t_max, drag_values):
     sim.dt = float(dt)
     sim.t_max = float(t_max)
     sim.use_quadratic_drag = "drag" in (drag_values or [])
+    sim.k_quad *= float(drag_strength)
 
     t_rk, x_rk, y_rk, vx_rk, vy_rk = sim.simulate(sim.acceleration_with_drag, sim.rk4_step)
     t_eu, x_eu, y_eu, vx_eu, vy_eu = sim.simulate(sim.acceleration_with_drag, sim.euler_step)
@@ -358,33 +469,25 @@ def update_view(theta_deg, v0, y0, dt, t_max, drag_values):
         speed_series.append((t_an, np.hypot(vx_an, vy_an), "Analytical"))
         height_series.append((t_an, y_an, "Analytical"))
 
-    dt_ref = max(1e-4, sim.dt / 50.0)
-    t_ref, x_ref, y_ref, _, _ = sim.simulate_with_dt(
-        sim.acceleration_with_drag,
-        sim.rk4_step,
-        dt_ref,
-        sim.t_max,
-        stop_at_ground=True,
+    analytical_figure = go.Figure()
+    analytical_figure.update_layout(
+        template="plotly_white",
+        height=PLOT_HEIGHT,
+        margin={"l": 56, "r": 24, "t": 56, "b": 48},
+        title="Distance From Analytical",
     )
-    t_rk_err, err_rk = sim.position_error_vs_time(t_rk, x_rk, y_rk, t_ref, x_ref, y_ref)
-    t_eu_err, err_eu = sim.position_error_vs_time(t_eu, x_eu, y_eu, t_ref, x_ref, y_ref)
-
-    dt_list, max_err_rk, max_err_eu = sim.run_convergence_study(sim.acceleration_with_drag)
-    slope_summary = html.Div(
-        [
-            html.H3("Convergence"),
-            html.P(f"RK4 slope: {sim.estimate_slope(dt_list, max_err_rk):.3f}"),
-            html.P(f"Euler slope: {sim.estimate_slope(dt_list, max_err_eu):.3f}"),
-        ],
-        style={
-            "background": "white",
-            "border": "1px solid #d9e2ec",
-            "borderRadius": "12px",
-            "padding": "16px",
-        },
+    analytical_figure.add_annotation(
+        text="Turn air resistance off to compare against the analytical solution.",
+        x=0.5,
+        y=0.5,
+        xref="paper",
+        yref="paper",
+        showarrow=False,
+        font={"size": 16},
     )
+    analytical_figure.update_xaxes(visible=False)
+    analytical_figure.update_yaxes(visible=False)
 
-    analytical_summary = html.Div()
     animation_series = [
         (t_rk, x_rk, y_rk, "RK4"),
         (t_eu, x_eu, y_eu, "Euler"),
@@ -392,55 +495,51 @@ def update_view(theta_deg, v0, y0, dt, t_max, drag_values):
     animation_title = "RK4 vs Euler"
 
     if has_analytical and analytical_results is not None:
-        _, err_rk_vs_an = sim.position_error_vs_time(t_rk, x_rk, y_rk, t_an, x_an, y_an)
-        _, err_eu_vs_an = sim.position_error_vs_time(t_eu, x_eu, y_eu, t_an, x_an, y_an)
-        analytical_summary = html.Div(
+        t_rk_err, err_rk = sim.analytical_position_error_vs_time(t_rk, x_rk, y_rk)
+        t_eu_err, err_eu = sim.analytical_position_error_vs_time(t_eu, x_eu, y_eu)
+        t_rk_an, err_rk_vs_an = sim.position_error_vs_time(t_rk, x_rk, y_rk, t_an, x_an, y_an)
+        t_eu_an, err_eu_vs_an = sim.position_error_vs_time(t_eu, x_eu, y_eu, t_an, x_an, y_an)
+        analytical_figure = make_figure(
             [
-                html.H3("Distance From Analytical"),
-                html.P(f"RK4 max position difference: {float(np.max(err_rk_vs_an)):.6g} m"),
-                html.P(f"Euler max position difference: {float(np.max(err_eu_vs_an)):.6g} m"),
+                (t_rk_an, err_rk_vs_an, "RK4 vs analytical"),
+                (t_eu_an, err_eu_vs_an, "Euler vs analytical"),
             ],
-            style={
-                "background": "white",
-                "border": "1px solid #d9e2ec",
-                "borderRadius": "12px",
-                "padding": "16px",
-            },
+            "time (s)",
+            "position error (m)",
+            "Distance From Analytical",
         )
-        animation_series.append((t_an, x_an, y_an, "Analytical"))
-        animation_title = "RK4 vs Euler vs Analytical"
+        max_error_title = "Max Error vs Time (vs analytical)"
+    else:
+        dt_ref = max(1e-4, sim.dt / 50.0)
+        t_ref, x_ref, y_ref, _, _ = sim.simulate_with_dt(
+            sim.acceleration_with_drag,
+            sim.rk4_step,
+            dt_ref,
+            sim.t_max,
+            stop_at_ground=True,
+        )
+        t_rk_err, err_rk = sim.position_error_vs_time(t_rk, x_rk, y_rk, t_ref, x_ref, y_ref)
+        t_eu_err, err_eu = sim.position_error_vs_time(t_eu, x_eu, y_eu, t_ref, x_ref, y_ref)
+        max_error_title = "Max Error vs Time (vs RK4 reference)"
 
     animation_html = sim.build_animation(animation_series, animation_title).data
 
     return (
         summary_children,
         make_figure(trajectory_series, "x (m)", "y (m)", "Projectile Trajectory"),
-        make_figure(speed_series, "time (s)", "speed (m/s)", "Speed vs Time", show_rangeslider=True),
-        make_figure(height_series, "time (s)", "height y (m)", "Height vs Time", show_rangeslider=True),
+        make_figure(speed_series, "time (s)", "speed (m/s)", "Speed vs Time"),
+        make_figure(height_series, "time (s)", "height y (m)", "Height vs Time"),
         make_figure(
             [
-                (t_rk_err, err_rk, "RK4 error"),
-                (t_eu_err, err_eu, "Euler error"),
+                (t_rk_err, running_max(err_rk), "RK4 max error"),
+                (t_eu_err, running_max(err_eu), "Euler max error"),
             ],
             "time (s)",
-            "position error (m)",
-            "Error vs Time (log-log)",
-            log_x=True,
+            "max position error so far (m)",
+            max_error_title,
             log_y=True,
         ),
-        make_figure(
-            [
-                (dt_list, max_err_rk, "RK4 max error"),
-                (dt_list, max_err_eu, "Euler max error"),
-            ],
-            "timestep dt (s)",
-            "max position error over time (m)",
-            "Error vs Timestep Size (log-log)",
-            log_x=True,
-            log_y=True,
-        ),
-        slope_summary,
-        analytical_summary,
+        analytical_figure,
         animation_html,
     )
 

@@ -77,18 +77,34 @@ def initial_state():
 def append_landing_point(t_vals, x_vals, y_vals, vx_vals, vy_vals, state, current_t):
     """Interpolate the ground hit so landing time and range look cleaner."""
     x_prev, y_prev = x_vals[-1], y_vals[-1]
+    vx_prev, vy_prev = vx_vals[-1], vy_vals[-1]
     x_new, y_new = state[0], state[1]
-    denom = y_prev - y_new
-    frac = (y_prev / denom) if denom != 0 else 1.0
+    dt_step = current_t - t_vals[-1]
 
-    x_land = x_prev + frac * (x_new - x_prev)
-    t_land = t_vals[-1] + frac * (current_t - t_vals[-1])
+    if not use_quadratic_drag:
+        disc = max(0.0, float(vy_prev**2 + 2.0 * g * y_prev))
+        tau = (vy_prev + np.sqrt(disc)) / g if g != 0 else dt_step
+        tau = min(max(float(tau), 0.0), dt_step)
+
+        x_land = x_prev + vx_prev * tau
+        t_land = t_vals[-1] + tau
+        vx_land = vx_prev
+        vy_land = vy_prev - g * tau
+    else:
+        denom = y_prev - y_new
+        frac = (y_prev / denom) if denom != 0 else 1.0
+        frac = min(max(float(frac), 0.0), 1.0)
+
+        x_land = x_prev + frac * (x_new - x_prev)
+        t_land = t_vals[-1] + frac * dt_step
+        vx_land = vx_prev + frac * (state[2] - vx_prev)
+        vy_land = vy_prev + frac * (state[3] - vy_prev)
 
     t_vals.append(t_land)
     x_vals.append(x_land)
     y_vals.append(0.0)
-    vx_vals.append(state[2])
-    vy_vals.append(state[3])
+    vx_vals.append(vx_land)
+    vy_vals.append(vy_land)
 
 
 def simulate_projectile(accel_func, step_func, dt_local=dt, t_max_local=t_max, stop_at_ground=True):
@@ -184,12 +200,34 @@ def analytical_closed_form(dt_local):
         else:
             t_vals[-1] = t_land
 
-    x_vals = vx0 * t_vals
-    y_vals = np.maximum(y0 + vy0 * t_vals - 0.5 * g * t_vals**2, 0.0)
-    vx_vals = np.full_like(t_vals, vx0, dtype=float)
-    vy_vals = vy0 - g * t_vals
+    return analytical_closed_form_at_times(t_vals)
 
-    return t_vals, x_vals, y_vals, vx_vals, vy_vals
+
+def analytical_closed_form_at_times(t_vals):
+    """Return the exact no-drag solution at the requested times."""
+    theta = np.deg2rad(theta_deg)
+    vx0 = v0 * np.cos(theta)
+    vy0 = v0 * np.sin(theta)
+
+    disc = max(0.0, float(vy0**2 + 2.0 * g * y0))
+    t_land = (vy0 + np.sqrt(disc)) / g if g != 0 else 0.0
+    t_arr = np.asarray(t_vals, dtype=float)
+    t_clamped = np.clip(t_arr, 0.0, t_land)
+
+    x_vals = vx0 * t_clamped
+    y_vals = np.maximum(y0 + vy0 * t_clamped - 0.5 * g * t_clamped**2, 0.0)
+    vx_vals = np.full_like(t_clamped, vx0, dtype=float)
+    vy_vals = vy0 - g * t_clamped
+
+    return t_clamped, x_vals, y_vals, vx_vals, vy_vals
+
+
+def analytical_position_error_vs_time(t, x, y):
+    """Compare a no-drag trajectory against the exact analytical solution."""
+    t_use = np.asarray(t, dtype=float)
+    _, x_ref, y_ref, _, _ = analytical_closed_form_at_times(t_use)
+    err = np.hypot(np.asarray(x, dtype=float) - x_ref, np.asarray(y, dtype=float) - y_ref)
+    return t_use, err
 
 
 def format_mm_ss_hh(seconds_float):
@@ -206,7 +244,16 @@ def downsample_series(t_vals, x_vals, y_vals, target=400):
     """Keep animations lighter by showing fewer points."""
     n_points = len(t_vals)
     step = max(1, n_points // target)
-    return t_vals[::step], x_vals[::step], y_vals[::step]
+    t_down = t_vals[::step]
+    x_down = x_vals[::step]
+    y_down = y_vals[::step]
+
+    if len(t_down) == 0 or t_down[-1] != t_vals[-1]:
+        t_down = np.append(t_down, t_vals[-1])
+        x_down = np.append(x_down, x_vals[-1])
+        y_down = np.append(y_down, y_vals[-1])
+
+    return t_down, x_down, y_down
 
 
 def build_animation(series_list, title):
@@ -216,6 +263,8 @@ def build_animation(series_list, title):
         for t_vals, x_vals, y_vals, label in series_list
     ]
     frames = min(len(t_vals) for t_vals, _, _, _ in downsampled)
+    total_duration = float(downsampled[0][0][frames - 1] - downsampled[0][0][0]) if frames else 0.0
+    interval_ms = max(1, int(round(1000.0 * total_duration / max(frames - 1, 1))))
 
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.set_axis_off()
@@ -286,7 +335,7 @@ def build_animation(series_list, title):
         update,
         frames=frames,
         init_func=init,
-        interval=20,
+        interval=interval_ms,
         blit=True,
     )
     plt.close(fig)
@@ -439,17 +488,23 @@ def run_simulation():
         f"Height vs Time (RK4 vs Euler{title_suffix})",
     )
 
-    dt_ref = max(1e-4, dt / 50.0)
-    t_ref, x_ref, y_ref, _, _ = simulate_with_dt(
-        acceleration_with_drag,
-        rk4_step,
-        dt_ref,
-        t_max,
-        stop_at_ground=True,
-    )
+    if has_analytical:
+        t_rk_err, err_rk = analytical_position_error_vs_time(t_rk, x_rk, y_rk)
+        t_eu_err, err_eu = analytical_position_error_vs_time(t_eu, x_eu, y_eu)
+        error_title = "Error vs Time (relative to analytical solution)"
+    else:
+        dt_ref = max(1e-4, dt / 50.0)
+        t_ref, x_ref, y_ref, _, _ = simulate_with_dt(
+            acceleration_with_drag,
+            rk4_step,
+            dt_ref,
+            t_max,
+            stop_at_ground=True,
+        )
 
-    t_rk_err, err_rk = position_error_vs_time(t_rk, x_rk, y_rk, t_ref, x_ref, y_ref)
-    t_eu_err, err_eu = position_error_vs_time(t_eu, x_eu, y_eu, t_ref, x_ref, y_ref)
+        t_rk_err, err_rk = position_error_vs_time(t_rk, x_rk, y_rk, t_ref, x_ref, y_ref)
+        t_eu_err, err_eu = position_error_vs_time(t_eu, x_eu, y_eu, t_ref, x_ref, y_ref)
+        error_title = "Error vs Time (relative to high-resolution RK4 reference)"
 
     plot_series(
         [
@@ -458,7 +513,7 @@ def run_simulation():
         ],
         "time (s)",
         "position error (m)",
-        "Error vs Time (relative to high-resolution RK4 reference)",
+        error_title,
     )
 
     dt_list, max_err_rk, max_err_eu = run_convergence_study(acceleration_with_drag)
@@ -501,11 +556,6 @@ def run_simulation():
         (t_eu, x_eu, y_eu, "Euler"),
     ]
     animation_title = "RK4 vs Euler"
-
-    if has_analytical and analytical_results is not None:
-        t_an, x_an, y_an, vx_an, vy_an = analytical_results
-        animation_series.append((t_an, x_an, y_an, "Analytical (closed-form)"))
-        animation_title = "RK4 vs Euler vs Analytical"
 
     display(build_animation(animation_series, animation_title))
 
